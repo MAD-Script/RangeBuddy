@@ -1,0 +1,52 @@
+{
+  "trip_id": "1784633741900",
+  "start_ts_ms": 1784633741976,
+  "end_ts_ms": 1784633799656,
+  "rider_kg": 68.0,
+  "passenger_kg": 0.0,
+  "start_charge_type": "unknown",
+  "start_bar": null,
+  "end_charge_type": "unknown",
+  "end_bar": null,
+  "notes": "",
+  "bar_drop_events": [
+    {
+      "timestamp_ms": 1784633746403,
+      "bar_level_after_drop": 4
+    },
+    {
+      "timestamp_ms": 1784633748612,
+      "bar_level_after_drop": 2
+    },
+    {
+      "timestamp_ms": 1784633749836,
+      "bar_level_after_drop": 1
+    }
+  ],
+  "alert_events": [
+    {
+      "timestamp_ms": 1784633755884,
+      "alert_type": "lowBatteryAudibleWarning"
+    },
+    {
+      "timestamp_ms": 1784633757551,
+      "alert_type": "refuelIndicatorOn"
+    },
+    {
+      "timestamp_ms": 1784633759104,
+      "alert_type": "criticalBlinkingRed"
+    },
+    {
+      "timestamp_ms": 1784633760712,
+      "alert_type": "lowBatteryAudibleWarning"
+    },
+    {
+      "timestamp_ms": 1784633761711,
+      "alert_type": "refuelIndicatorOn"
+    },
+    {
+      "timestamp_ms": 1784633762567,
+      "alert_type": "criticalBlinkingRed"
+    }
+  ]
+}

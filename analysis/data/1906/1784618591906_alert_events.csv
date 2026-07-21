@@ -1,0 +1,10 @@
+timestamp_ms,alert_type
+1784618603070,lowBatteryAudibleWarning
+1784618611492,lowBatteryAudibleWarning
+1784618622102,criticalBlinkingRed
+1784618623806,refuelIndicatorOn
+1784618625626,lowBatteryAudibleWarning
+1784618633010,refuelIndicatorOn
+1784618635611,lowBatteryAudibleWarning
+1784618637736,lowBatteryAudibleWarning
+1784618640071,criticalBlinkingRed

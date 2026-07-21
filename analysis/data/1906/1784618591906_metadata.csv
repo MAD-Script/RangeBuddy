@@ -1,0 +1,2 @@
+trip_id,start_ts_ms,end_ts_ms,rider_kg,passenger_kg,start_charge_type,start_bar,end_charge_type,end_bar,notes
+1784618591906,1784618592190,1784618648774,68.0,0.0,unknown,,unknown,,""
