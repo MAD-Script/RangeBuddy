@@ -4,7 +4,6 @@ import '../models/passenger.dart';
 import '../models/vehicle_profile.dart';
 import '../services/range_engine.dart';
 import '../widgets/battery_gauge.dart';
-import '../widgets/stat_tile.dart';
 
 class HomeScreen extends StatefulWidget {
   final RangeEngine engine;
@@ -132,73 +131,131 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final engine = widget.engine;
     final rangeKm = engine.estimatedRangeKmBaseline();
+    final scheme = Theme.of(context).colorScheme;
+    final batteryPercent = engine.batteryPercent();
 
     return Scaffold(
-      appBar: AppBar(title: Text(widget.profile.name)),
+      appBar: AppBar(
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(widget.profile.name, style: const TextStyle(fontWeight: FontWeight.w800)),
+            Text('RANGE TRACKER', style: TextStyle(fontSize: 10, letterSpacing: 1.4, color: scheme.onSurfaceVariant)),
+          ],
+        ),
+        actions: [
+          Container(
+            width: 12,
+            height: 12,
+            margin: const EdgeInsets.only(right: 22),
+            decoration: BoxDecoration(color: const Color(0xFF35A982), shape: BoxShape.circle),
+          ),
+        ],
+      ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              const Center(
+                child: Text(
+                  'ESTIMATED RANGE',
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 2.2),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Center(
+                child: RichText(
+                  text: TextSpan(
+                    style: TextStyle(color: scheme.onSurface),
+                    children: [
+                      TextSpan(
+                        text: rangeKm.toStringAsFixed(0),
+                        style: const TextStyle(fontSize: 76, height: .95, fontWeight: FontWeight.w900, letterSpacing: -3),
+                      ),
+                      TextSpan(
+                        text: ' km',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: scheme.onSurfaceVariant),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Center(
+                child: Text(
+                  batteryPercent < 20 ? 'Charge soon for a confident trip' : 'Ready for the road',
+                  style: TextStyle(color: scheme.onSurfaceVariant),
+                ),
+              ),
+              const SizedBox(height: 18),
               Card(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 24,
-                    vertical: 32,
+                    horizontal: 20,
+                    vertical: 18,
                   ),
                   child: BatteryTankGauge(
-                    percent: engine.batteryPercent(),
-                    rangeLabel: '~${rangeKm.toStringAsFixed(0)} km remaining',
-                    isEstimateUncertain: engine.batteryPercent() < 20,
+                    percent: batteryPercent,
+                    rangeLabel: '${batteryPercent.toStringAsFixed(0)}% charge available',
+                    isEstimateUncertain: batteryPercent < 20,
                   ),
                 ),
               ),
               const SizedBox(height: 16),
+              Text('VEHICLE SNAPSHOT', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1.6, color: scheme.onSurfaceVariant)),
+              const SizedBox(height: 10),
               Row(
                 children: [
                   Expanded(
-                    child: StatTile(
-                      label: 'System',
+                    child: _MetricCard(
+                      label: 'SYSTEM',
                       value: '${widget.profile.systemVoltage.toStringAsFixed(0)}V',
-                      icon: Icons.bolt_outlined,
+                      icon: Icons.bolt_rounded,
                     ),
                   ),
+                  const SizedBox(width: 10),
                   Expanded(
-                    child: StatTile(
-                      label: 'Capacity',
+                    child: _MetricCard(
+                      label: 'CAPACITY',
                       value: '${widget.profile.batteryAh.toStringAsFixed(0)}Ah',
-                      icon: Icons.battery_full,
+                      icon: Icons.battery_charging_full_rounded,
                     ),
                   ),
+                  const SizedBox(width: 10),
                   Expanded(
-                    child: StatTile(
-                      label: 'Health',
+                    child: _MetricCard(
+                      label: 'HEALTH',
                       value:
                           '${(widget.profile.socHealthFactor * 100).toStringAsFixed(0)}%',
-                      icon: Icons.favorite_border,
+                      icon: Icons.favorite_rounded,
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 24),
-              Text('Riding with', style: Theme.of(context).textTheme.titleSmall),
-              const SizedBox(height: 8),
+              const SizedBox(height: 26),
+              Text('RIDE SETUP', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1.6, color: scheme.onSurfaceVariant)),
+              const SizedBox(height: 10),
               // Only one of these can be active at a time — the bike
               // seats 2 total (you + one passenger), so selecting one
               // toggles the others off automatically.
               ValueListenableBuilder(
                 valueListenable: widget.passengerBox.listenable(),
                 builder: (context, Box<Passenger> box, _) {
-                  return Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      ChoiceChip(
-                        label: const Text('Solo'),
-                        selected: _selectedKey == _PassengerSelection.solo,
-                        onSelected: (_) => _select(_PassengerSelection.solo, 0),
-                      ),
+                  return Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          ChoiceChip(
+                            avatar: const Icon(Icons.person_rounded, size: 17),
+                            label: const Text('Solo'),
+                            selected: _selectedKey == _PassengerSelection.solo,
+                            onSelected: (_) => _select(_PassengerSelection.solo, 0),
+                          ),
                       for (final key in box.keys)
                         ChoiceChip(
                           label: Text(box.get(key)!.name),
@@ -221,15 +278,17 @@ class _HomeScreenState extends State<HomeScreen> {
                         label: const Text('Add'),
                         onPressed: _addSavedPassenger,
                       ),
-                    ],
+                        ],
+                      ),
+                    ),
                   );
                 },
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 24),
               FilledButton.icon(
                 onPressed: widget.isRideActive ? null : widget.onStartRide,
-                icon: const Icon(Icons.play_arrow),
-                label: const Text('Start Ride'),
+                icon: const Icon(Icons.play_arrow_rounded),
+                label: const Text('START RIDE'),
               ),
               if (widget.isRideActive) ...[
                 const SizedBox(height: 12),
@@ -261,7 +320,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
               ],
-              const SizedBox(height: 12),
+              const SizedBox(height: 14),
               OutlinedButton.icon(
                 onPressed: () => setState(engine.resetToFull),
                 icon: const Icon(Icons.battery_charging_full),
@@ -269,6 +328,34 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MetricCard extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+
+  const _MetricCard({required this.label, required this.value, required this.icon});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, size: 18, color: scheme.primary),
+            const SizedBox(height: 14),
+            Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 3),
+            Text(label, style: TextStyle(fontSize: 9, letterSpacing: .8, fontWeight: FontWeight.w700, color: scheme.onSurfaceVariant)),
+          ],
         ),
       ),
     );

@@ -11,7 +11,6 @@ import '../services/trip_logger.dart';
 import '../theme/app_theme.dart';
 import '../widgets/segmented_bar.dart';
 import '../widgets/speed_gauge.dart';
-import '../widgets/stat_tile.dart';
 import '../widgets/trip_route_map.dart';
 
 class ActiveTripScreen extends StatefulWidget {
@@ -293,47 +292,86 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> {
         engine.profile.totalEnergyWh() / engine.profile.baseWhPerKm;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Active Ride')),
+      appBar: AppBar(
+        title: const Text('Ride in progress', style: TextStyle(fontWeight: FontWeight.w800)),
+        actions: const [
+          Padding(
+            padding: EdgeInsets.only(right: 20),
+            child: Icon(Icons.gps_fixed_rounded, color: Color(0xFF35A982)),
+          ),
+        ],
+      ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.fromLTRB(20, 4, 20, 28),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              const Center(
+                child: Text(
+                  'LIVE SPEED',
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 2.2),
+                ),
+              ),
               Center(
                 child: SpeedGauge(
                   speedKmh: _rawSpeedKmh,
                   maxSpeedKmh: engine.profile.topSpeedKmh,
                 ),
               ),
-              const SizedBox(height: 12),
+              Text(
+                'DOTS FILL AS YOU APPROACH ${engine.profile.topSpeedKmh.toStringAsFixed(0)} KM/H',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 1.1, color: Theme.of(context).colorScheme.onSurfaceVariant),
+              ),
+              const SizedBox(height: 18),
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  StatTile(
+                  Expanded(child: _RideMetric(
                     label: 'Distance',
                     value: '${_distanceKm.toStringAsFixed(1)} km',
                     icon: Icons.route,
-                  ),
-                  StatTile(
+                  )),
+                  const SizedBox(width: 10),
+                  Expanded(child: _RideMetric(
                     label: 'Elapsed',
                     value: _formatDuration(_elapsed),
                     icon: Icons.timer_outlined,
-                  ),
+                  )),
                 ],
               ),
               const SizedBox(height: 16),
-              TripRouteMap(
-                routePoints: _routePoints,
-                currentPosition: _routePoints.isNotEmpty ? _routePoints.last : null,
-                tileCacheDir: widget.tileCacheDir,
-                interactive: false,
-                followCurrentPosition: true,
+              Card(
+                clipBehavior: Clip.antiAlias,
+                child: Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
+                      child: Row(
+                        children: [
+                          Icon(Icons.map_outlined, size: 18, color: Theme.of(context).colorScheme.primary),
+                          const SizedBox(width: 7),
+                          const Text('ROUTE SNAPSHOT', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1.2)),
+                        ],
+                      ),
+                    ),
+                    SizedBox(
+                      height: 180,
+                      child: TripRouteMap(
+                        routePoints: _routePoints,
+                        currentPosition: _routePoints.isNotEmpty ? _routePoints.last : null,
+                        tileCacheDir: widget.tileCacheDir,
+                        interactive: false,
+                        followCurrentPosition: true,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
               Card(
                 child: Padding(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(18),
                   child: Column(
                     children: [
                       SegmentedBar(
@@ -355,7 +393,7 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 18),
               Row(
                 children: [
                   Expanded(
@@ -383,6 +421,45 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RideMetric extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+
+  const _RideMetric({required this.label, required this.value, required this.icon});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(15),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(color: scheme.primaryContainer, shape: BoxShape.circle),
+              child: Icon(icon, size: 19, color: scheme.primary),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(value, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 2),
+                  Text(label.toUpperCase(), style: TextStyle(fontSize: 10, letterSpacing: .8, fontWeight: FontWeight.w700, color: scheme.onSurfaceVariant)),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );

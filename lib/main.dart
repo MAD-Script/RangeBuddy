@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:dynamic_color/dynamic_color.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
@@ -68,15 +67,11 @@ class EvRangeTrackerApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DynamicColorBuilder(
-      builder: (lightScheme, darkScheme) {
-        return MaterialApp(
-          title: 'EV Range Tracker',
-          theme: buildAppTheme(lightScheme, Brightness.light),
-          darkTheme: buildAppTheme(darkScheme, Brightness.dark),
-          home: const RootShell(),
-        );
-      },
+    return MaterialApp(
+      title: 'EV Range Tracker',
+      theme: buildAppTheme(null, Brightness.light),
+      darkTheme: buildAppTheme(null, Brightness.dark),
+      home: const RootShell(),
     );
   }
 }

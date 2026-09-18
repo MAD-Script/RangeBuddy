@@ -1,14 +1,19 @@
 import 'package:flutter/material.dart';
 
-/// Material 3 theme. Pass through DynamicColorBuilder at the app root
-/// (see main.dart) to get true Material You colors pulled from the
-/// user's wallpaper on supported Android devices; this seed is the
-/// fallback for devices/OS versions that don't support it.
-const _seedColor = Color(0xFF00695C); // teal — reads as "energy/electric"
+/// Material 3 theme with a stable EV-specific palette.
+const _seedColor = Color(0xFF168F78);
 
-ThemeData buildAppTheme(ColorScheme? dynamicScheme, Brightness brightness) {
-  final scheme = dynamicScheme ??
-      ColorScheme.fromSeed(seedColor: _seedColor, brightness: brightness);
+ThemeData buildAppTheme(ColorScheme? _, Brightness brightness) {
+  // Keep the dashboard palette intentional. Dynamic colours are lovely for
+  // utility apps, but can turn the teal/blue speed and energy language into
+  // arbitrary colours from a device wallpaper.
+  final scheme = ColorScheme.fromSeed(
+    seedColor: _seedColor,
+    brightness: brightness,
+    surface: brightness == Brightness.light
+        ? const Color(0xFFF4FAF8)
+        : const Color(0xFF101A19),
+  );
 
   return ThemeData(
     useMaterial3: true,
@@ -22,13 +27,22 @@ ThemeData buildAppTheme(ColorScheme? dynamicScheme, Brightness brightness) {
     ),
     cardTheme: CardThemeData(
       elevation: 0,
-      color: scheme.surfaceContainerHigh,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      color: brightness == Brightness.light
+          ? const Color(0xFFEAF5F2)
+          : scheme.surfaceContainerHigh,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      ),
+    ),
+    navigationBarTheme: NavigationBarThemeData(
+      height: 72,
+      indicatorColor: scheme.primaryContainer,
+      labelTextStyle: WidgetStatePropertyAll(
+        TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: scheme.onSurface),
       ),
     ),
   );

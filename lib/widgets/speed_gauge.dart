@@ -15,7 +15,7 @@ class SpeedGauge extends StatelessWidget {
     super.key,
     required this.speedKmh,
     required this.maxSpeedKmh,
-    this.size = 220,
+    this.size = 288,
   });
 
   @override
@@ -26,16 +26,17 @@ class SpeedGauge extends StatelessWidget {
 
     return SizedBox(
       width: size,
-      height: size * 0.82,
+      height: size * .9,
       child: Stack(
         alignment: Alignment.center,
         children: [
           CustomPaint(
-            size: Size(size, size * 0.82),
+            size: Size(size, size * .9),
             painter: _DotArcPainter(
               fraction: fraction,
-              filledColor: scheme.primary,
-              unfilledColor: scheme.surfaceContainerHighest,
+              leftColor: const Color(0xFF35A982),
+              rightColor: const Color(0xFF2C9FCC),
+              unfilledColor: scheme.outlineVariant.withValues(alpha: .28),
             ),
           ),
           Column(
@@ -45,16 +46,18 @@ class SpeedGauge extends StatelessWidget {
                 speedKmh.toStringAsFixed(0),
                 style: Theme.of(context).textTheme.displayLarge?.copyWith(
                       fontWeight: FontWeight.w800,
-                      fontSize: 72,
+                      fontSize: size * .31,
                       height: 1,
                       color: scheme.onSurface,
                     ),
               ),
               Text(
-                'km/h',
+                'KM/H',
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       color: scheme.onSurfaceVariant,
-                      letterSpacing: 1.5,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 2.1,
                     ),
               ),
             ],
@@ -67,29 +70,33 @@ class SpeedGauge extends StatelessWidget {
 
 class _DotArcPainter extends CustomPainter {
   final double fraction; // 0..1 of max speed
-  final Color filledColor;
+  final Color leftColor;
+  final Color rightColor;
   final Color unfilledColor;
 
-  static const _dotsPerSide = 9;
-  static const _dotRadius = 4.0;
+  static const _dotsPerSide = 11;
+  static const _dotRadius = 5.2;
   // Screen-angle convention here: 0 rad = right, angle increases
   // clockwise (since canvas y grows downward), so 90 deg = bottom,
   // 180 deg = left, 270 deg = top. The left arc sweeps from just past
   // bottom up to just past top on the left side; the right arc is its
   // mirror image (reflected across the vertical axis: angle -> 180 - angle).
-  static const _arcStartDeg = 100.0;
-  static const _arcEndDeg = 255.0;
+  static const _arcStartDeg = 92.0;
+  static const _arcEndDeg = 258.0;
 
   _DotArcPainter({
     required this.fraction,
-    required this.filledColor,
+    required this.leftColor,
+    required this.rightColor,
     required this.unfilledColor,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height * 0.62);
-    final radius = size.width / 2 - _dotRadius - 2;
+    // Match the paint centre to Stack's centre so the number is literally
+    // framed by the live speed dots, with no dots clipped at either edge.
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.width * .44;
     final filledCount = (fraction * _dotsPerSide).round();
 
     for (var i = 0; i < _dotsPerSide; i++) {
@@ -97,9 +104,8 @@ class _DotArcPainter extends CustomPainter {
       final leftDeg = _arcStartDeg + t * (_arcEndDeg - _arcStartDeg);
       final rightDeg = 180 - leftDeg;
       final isFilled = i < filledCount;
-      final paint = Paint()..color = isFilled ? filledColor : unfilledColor;
-
-      for (final deg in [leftDeg, rightDeg]) {
+      for (final (deg, color) in [(leftDeg, leftColor), (rightDeg, rightColor)]) {
+        final paint = Paint()..color = isFilled ? color : unfilledColor;
         final rad = deg * math.pi / 180;
         final point = Offset(
           center.dx + radius * math.cos(rad),
@@ -113,5 +119,7 @@ class _DotArcPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _DotArcPainter oldDelegate) =>
       oldDelegate.fraction != fraction ||
-      oldDelegate.filledColor != filledColor;
+      oldDelegate.leftColor != leftColor ||
+      oldDelegate.rightColor != rightColor ||
+      oldDelegate.unfilledColor != unfilledColor;
 }
