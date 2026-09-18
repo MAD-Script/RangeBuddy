@@ -1,19 +1,9 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:flutter_map/flutter_map.dart';
 import '../data/vehicle_catalog.dart';
 import '../models/vehicle_profile.dart';
-import '../services/tile_downloader.dart';
-import '../widgets/trip_route_map.dart' show cartoDarkTileUrl;
-
-/// Covers the Mirpur DOHS <-> Tongi College Gate commute corridor plus
-/// a comfortable margin for detours/errands around Dhaka. Buffered
-/// from your two real commute endpoints, not an arbitrary guess.
-final defaultOfflineMapBounds = LatLngBounds(
-  const LatLng(23.79, 90.32), // south-west
-  const LatLng(23.96, 90.45), // north-east
-);
+import 'offline_map_area_screen.dart';
 
 class VehicleSetupScreen extends StatefulWidget {
   final VehicleProfile profile;
@@ -33,7 +23,6 @@ class _VehicleSetupScreenState extends State<VehicleSetupScreen> {
   late final _riderWeightController = TextEditingController(
     text: widget.profile.defaultRiderWeightKg.toStringAsFixed(0),
   );
-  double? _downloadProgress; // null = not downloading
 
   Future<void> _saveRiderWeight() async {
     widget.profile.defaultRiderWeightKg =
@@ -52,53 +41,24 @@ class _VehicleSetupScreenState extends State<VehicleSetupScreen> {
       ..systemVoltage = entry.systemVoltage
       ..batteryAh = entry.batteryAh
       ..motorWattPeak = entry.motorWattPeak
-      ..vehicleWeightKg = entry.vehicleWeightKg;
+      ..vehicleWeightKg = entry.vehicleWeightKg
+      ..topSpeedKmh = entry.topSpeedKmh;
     await widget.profile.save();
     setState(() {});
   }
 
-  Future<void> _downloadOfflineMap() async {
-    final downloader = TileDownloader(
-      urlTemplate: cartoDarkTileUrl,
-      cacheDir: widget.tileCacheDir,
-    );
-    final estimate = downloader.estimate(defaultOfflineMapBounds);
-
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Download offline map area'),
-        content: Text(
-          'This covers your Mirpur DOHS <-> Tongi commute corridor plus '
-          'a margin around Dhaka.\n\n'
-          '~${estimate.tileCount} tiles, roughly '
-          '${estimate.estimatedMb.toStringAsFixed(0)}MB. Already-cached '
-          'tiles are skipped, so re-running this later only fetches '
-          'what\'s missing.',
+  Future<void> _openOfflineMapPicker() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => OfflineMapAreaScreen(
+          tileCacheDir: widget.tileCacheDir,
+          // Starting view: Dhaka, roughly your usual riding area — you
+          // can pan/zoom anywhere from here before downloading.
+          initialCenter: const LatLng(23.87, 90.38),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Download'),
-          ),
-        ],
       ),
     );
-    if (confirmed != true) return;
-
-    setState(() => _downloadProgress = 0);
-    await for (final progress in downloader.download(defaultOfflineMapBounds)) {
-      if (mounted) setState(() => _downloadProgress = progress.fraction);
-    }
-    if (mounted) {
-      setState(() => _downloadProgress = null);
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Offline map ready')));
-    }
   }
 
   @override
@@ -169,23 +129,19 @@ class _VehicleSetupScreenState extends State<VehicleSetupScreen> {
           Text('Offline Map', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 4),
           Text(
-            'Pre-download map tiles for your regular riding area so the '
-            'map works with no signal.',
+            'Choose exactly which area to make available offline by '
+            'panning and zooming, same as saving an offline area in '
+            'Google Maps.',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
           ),
           const SizedBox(height: 12),
-          if (_downloadProgress != null) ...[
-            LinearProgressIndicator(value: _downloadProgress),
-            const SizedBox(height: 8),
-            Text('${(_downloadProgress! * 100).toStringAsFixed(0)}%'),
-          ] else
-            OutlinedButton.icon(
-              onPressed: _downloadOfflineMap,
-              icon: const Icon(Icons.download_outlined),
-              label: const Text('Download Offline Map Area'),
-            ),
+          OutlinedButton.icon(
+            onPressed: _openOfflineMapPicker,
+            icon: const Icon(Icons.map_outlined),
+            label: const Text('Select Offline Map Area'),
+          ),
         ],
       ),
     );

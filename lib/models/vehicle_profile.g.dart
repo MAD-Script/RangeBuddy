@@ -30,13 +30,14 @@ class VehicleProfileAdapter extends TypeAdapter<VehicleProfile> {
       defaultRiderWeightKg: fields[10] as double,
       congestionOverheadWhPerKm: fields[11] as double,
       congestionSpeedThresholdKmh: fields[12] as double,
+      topSpeedKmh: fields[13] as double,
     );
   }
 
   @override
   void write(BinaryWriter writer, VehicleProfile obj) {
     writer
-      ..writeByte(13)
+      ..writeByte(14)
       ..writeByte(0)
       ..write(obj.name)
       ..writeByte(1)
@@ -62,7 +63,9 @@ class VehicleProfileAdapter extends TypeAdapter<VehicleProfile> {
       ..writeByte(11)
       ..write(obj.congestionOverheadWhPerKm)
       ..writeByte(12)
-      ..write(obj.congestionSpeedThresholdKmh);
+      ..write(obj.congestionSpeedThresholdKmh)
+      ..writeByte(13)
+      ..write(obj.topSpeedKmh);
   }
 
   @override

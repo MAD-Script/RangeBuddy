@@ -1,16 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import '../models/passenger.dart';
 import '../models/vehicle_profile.dart';
 import '../services/range_engine.dart';
 import '../widgets/battery_gauge.dart';
 import '../widgets/stat_tile.dart';
-import 'package:hive_flutter/hive_flutter.dart';
 
 class HomeScreen extends StatefulWidget {
   final RangeEngine engine;
   final VehicleProfile profile;
   final Box<Passenger> passengerBox;
   final VoidCallback onStartRide;
+  final bool isRideActive;
+  final VoidCallback onResumeRide;
 
   /// Called whenever the passenger selection changes, so the caller
   /// always has the current passenger weight ready the instant
@@ -24,6 +26,8 @@ class HomeScreen extends StatefulWidget {
     required this.passengerBox,
     required this.onStartRide,
     required this.onPassengerWeightChanged,
+    required this.isRideActive,
+    required this.onResumeRide,
   });
 
   @override
@@ -223,10 +227,40 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               const SizedBox(height: 32),
               FilledButton.icon(
-                onPressed: widget.onStartRide,
+                onPressed: widget.isRideActive ? null : widget.onStartRide,
                 icon: const Icon(Icons.play_arrow),
                 label: const Text('Start Ride'),
               ),
+              if (widget.isRideActive) ...[
+                const SizedBox(height: 12),
+                Card(
+                  color: Theme.of(context).colorScheme.primaryContainer,
+                  child: ListTile(
+                    onTap: widget.onResumeRide,
+                    leading: Icon(
+                      Icons.electric_bike,
+                      color: Theme.of(context).colorScheme.onPrimaryContainer,
+                    ),
+                    title: Text(
+                      'Ride in progress',
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onPrimaryContainer,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    subtitle: Text(
+                      'Tap to return to your active ride',
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onPrimaryContainer,
+                      ),
+                    ),
+                    trailing: Icon(
+                      Icons.chevron_right,
+                      color: Theme.of(context).colorScheme.onPrimaryContainer,
+                    ),
+                  ),
+                ),
+              ],
               const SizedBox(height: 12),
               OutlinedButton.icon(
                 onPressed: () => setState(engine.resetToFull),

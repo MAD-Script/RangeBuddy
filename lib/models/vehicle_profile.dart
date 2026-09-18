@@ -63,6 +63,13 @@ class VehicleProfile extends HiveObject {
   @HiveField(12)
   double congestionSpeedThresholdKmh;
 
+  // The bike's real top speed (full throttle, not your usual eco/1st
+  // gear cap) — used as the max reference for the speed gauge, so the
+  // dial reflects the vehicle's actual capability rather than
+  // whichever riding mode you happen to be in today.
+  @HiveField(13)
+  double topSpeedKmh;
+
   VehicleProfile({
     this.name = 'TailG F52 Red Rabbit',
     this.systemVoltage = 72.0,
@@ -77,6 +84,7 @@ class VehicleProfile extends HiveObject {
     this.defaultRiderWeightKg = 68.0,
     this.congestionOverheadWhPerKm = 6.5,
     this.congestionSpeedThresholdKmh = 25.0,
+    this.topSpeedKmh = 50.0,
   });
 
   double totalEnergyWh() => systemVoltage * batteryAh * socHealthFactor;

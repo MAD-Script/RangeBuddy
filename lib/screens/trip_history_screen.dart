@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:share_plus/share_plus.dart';
 import '../models/trip_metadata.dart';
 import '../models/trip_sample.dart';
@@ -7,7 +8,6 @@ import '../models/bar_drop_event.dart';
 import '../models/vehicle_alert_event.dart';
 import '../services/trip_logger.dart';
 import 'trip_detail_screen.dart';
-import 'package:hive_flutter/hive_flutter.dart';
 
 class TripHistoryScreen extends StatelessWidget {
   final Box<TripMetadata> metadataBox;

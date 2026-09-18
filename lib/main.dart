@@ -88,9 +88,24 @@ class RootShell extends StatefulWidget {
   State<RootShell> createState() => _RootShellState();
 }
 
+class _ActiveRideParams {
+  final String tripId;
+  final double riderWeightKg;
+  final double passengerWeightKg;
+  final double totalMassKg;
+
+  const _ActiveRideParams({
+    required this.tripId,
+    required this.riderWeightKg,
+    required this.passengerWeightKg,
+    required this.totalMassKg,
+  });
+}
+
 class _RootShellState extends State<RootShell> {
   int _tabIndex = 0;
   double _selectedPassengerWeightKg = 0;
+  _ActiveRideParams? _activeRide;
   late final VehicleProfile _profile = profileBox.values.first;
   late final RangeEngine _engine = RangeEngine(profile: _profile);
   late final TripLogger _logger = TripLogger(
@@ -105,22 +120,43 @@ class _RootShellState extends State<RootShell> {
     final totalMassKg = _profile.vehicleWeightKg +
         _profile.defaultRiderWeightKg +
         _selectedPassengerWeightKg;
-    if (!mounted) return;
+    _activeRide = _ActiveRideParams(
+      tripId: tripId,
+      riderWeightKg: _profile.defaultRiderWeightKg,
+      passengerWeightKg: _selectedPassengerWeightKg,
+      totalMassKg: totalMassKg,
+    );
+    await _openActiveTripScreen();
+  }
+
+  // Used both for starting fresh (from Start Ride) and for resuming a
+  // ride already in progress (from Home's "Active Ride" tile) — which
+  // path applies is decided inside ActiveTripScreen itself, based on
+  // whether TripLogger says this tripId is already logging.
+  Future<void> _openActiveTripScreen() async {
+    final ride = _activeRide;
+    if (ride == null || !mounted) return;
     await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => ActiveTripScreen(
           engine: _engine,
           logger: _logger,
-          tripId: tripId,
-          riderWeightKg: _profile.defaultRiderWeightKg,
-          passengerWeightKg: _selectedPassengerWeightKg,
-          totalMassKg: totalMassKg,
+          tripId: ride.tripId,
+          riderWeightKg: ride.riderWeightKg,
+          passengerWeightKg: ride.passengerWeightKg,
+          totalMassKg: ride.totalMassKg,
           tileCacheDir: tileCacheDir,
+          metadataBox: metadataBox,
         ),
       ),
     );
-    setState(() {}); // refresh Home's gauge after returning from a ride
+    // If the ride ended (End Ride was tapped) while we were there,
+    // clear it so Home stops offering to resume a trip that's over.
+    if (!_logger.isLogging) {
+      _activeRide = null;
+    }
+    setState(() {}); // refresh Home's gauge/active-ride tile
   }
 
   @override
@@ -132,6 +168,8 @@ class _RootShellState extends State<RootShell> {
         passengerBox: passengerBox,
         onStartRide: _startRide,
         onPassengerWeightChanged: (kg) => _selectedPassengerWeightKg = kg,
+        isRideActive: _activeRide != null,
+        onResumeRide: _openActiveTripScreen,
       ),
       TripHistoryScreen(
         metadataBox: metadataBox,

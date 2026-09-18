@@ -9,7 +9,8 @@ import '../models/trip_sample.dart';
 import '../models/trip_metadata.dart';
 import '../models/bar_drop_event.dart';
 import '../models/vehicle_alert_event.dart';
-import 'trip_foreground_task.dart';
+import '../services/trip_foreground_task.dart';
+import '../services/motion_detector.dart';
 
 /// Thrown when location permission is denied — callers should catch
 /// this specifically and show the user a clear message, not just fail
@@ -65,6 +66,7 @@ class TripLogger {
   TripSampleCallback? _onSample;
   int? _lastLoggedBarLevel; // null = still on the full/top bar (5)
   double _cumulativeDistanceKm = 0; // for the notification, independent of UI
+  final MotionDetector _motionDetector = MotionDetector();
 
   static const double _smoothingAlpha = 0.3; // 0=fully smoothed, 1=raw
 
@@ -82,6 +84,20 @@ class TripLogger {
   });
 
   bool get isLogging => _activeTripId != null;
+
+  /// The trip currently being logged, if any — used by the UI to
+  /// detect "there's already a ride in progress" and offer to resume
+  /// viewing it, rather than starting a second one.
+  String? get activeTripId => _activeTripId;
+
+  /// Reattaches a sample callback to an ALREADY-running trip, without
+  /// restarting GPS logging or touching metadata. Use this when the
+  /// user navigates back into an in-progress ride (e.g. from Home's
+  /// "Active Ride" tile) — startTrip() would throw since a trip is
+  /// already active, and it would also wrongly reset the metadata.
+  void attachSampleCallback(TripSampleCallback? callback) {
+    _onSample = callback;
+  }
 
   /// The lowest bar level still valid to select next (strictly less
   /// than the last one logged, or highestLoggableBar if none yet).
@@ -169,6 +185,7 @@ class TripLogger {
     _onSample = onSample;
 
     await startTripForegroundService();
+    _motionDetector.start();
 
     const settings = LocationSettings(
       accuracy: LocationAccuracy.high,
@@ -189,20 +206,29 @@ class TripLogger {
     final nowMs = DateTime.now().millisecondsSinceEpoch;
     final rawSpeedKmh = position.speed * 3.6; // Geolocator gives m/s
 
+    // ZUPT correction: if the accelerometer confidently says we're not
+    // moving in ANY direction, trust that over GPS's noisy near-zero
+    // speed reading (GPS drift can show 3-5km/h "creep" while parked).
+    // The raw sample stored to Hive keeps the true GPS value regardless
+    // — this correction only affects the live engine/UI/smoothing path.
+    final stationaryOverride =
+        _motionDetector.hasEnoughData && _motionDetector.isStationary;
+    final effectiveSpeedKmh = stationaryOverride ? 0.0 : rawSpeedKmh;
+
     // Exponential moving average smoothing — see typedef doc above
     // for why this matters (drag scales with speed^3).
     _smoothedSpeedKmh = _smoothedSpeedKmh == null
-        ? rawSpeedKmh
-        : (_smoothingAlpha * rawSpeedKmh) +
+        ? effectiveSpeedKmh
+        : (_smoothingAlpha * effectiveSpeedKmh) +
             ((1 - _smoothingAlpha) * _smoothedSpeedKmh!);
 
     final dtSeconds =
         _lastTimestampMs == null ? 1.0 : (nowMs - _lastTimestampMs!) / 1000.0;
     _lastTimestampMs = nowMs;
-    _cumulativeDistanceKm += rawSpeedKmh * (dtSeconds / 3600.0);
+    _cumulativeDistanceKm += effectiveSpeedKmh * (dtSeconds / 3600.0);
     updateTripForegroundNotification(
       distanceKm: _cumulativeDistanceKm,
-      speedKmh: rawSpeedKmh,
+      speedKmh: effectiveSpeedKmh,
     );
 
     sampleBox.add(
@@ -211,14 +237,14 @@ class TripLogger {
         timestampMs: nowMs,
         latitude: position.latitude,
         longitude: position.longitude,
-        gpsSpeedKmh: rawSpeedKmh,
+        gpsSpeedKmh: rawSpeedKmh, // true raw GPS value, uncorrected
         altitudeM: position.altitude,
         accuracyM: position.accuracy,
       ),
     );
 
     _onSample?.call(
-      rawSpeedKmh: rawSpeedKmh,
+      rawSpeedKmh: effectiveSpeedKmh,
       smoothedSpeedKmh: _smoothedSpeedKmh!,
       dtSeconds: dtSeconds,
       latitude: position.latitude,
@@ -286,6 +312,7 @@ class TripLogger {
     _positionSub = null;
     _onSample = null;
     await stopTripForegroundService();
+    _motionDetector.stop();
 
     final tripId = _activeTripId!;
     final meta = metadataBox.get(tripId);

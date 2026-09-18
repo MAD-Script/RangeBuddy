@@ -1,11 +1,16 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:hive/hive.dart';
 import 'package:latlong2/latlong.dart';
+import '../models/trip_metadata.dart';
+import '../models/trip_sample.dart';
 import '../models/vehicle_alert_event.dart';
 import '../services/range_engine.dart';
 import '../services/trip_logger.dart';
-import '../widgets/battery_gauge.dart';
+import '../theme/app_theme.dart';
+import '../widgets/segmented_bar.dart';
+import '../widgets/speed_gauge.dart';
 import '../widgets/stat_tile.dart';
 import '../widgets/trip_route_map.dart';
 
@@ -17,6 +22,7 @@ class ActiveTripScreen extends StatefulWidget {
   final double passengerWeightKg;
   final double totalMassKg;
   final Directory tileCacheDir;
+  final Box<TripMetadata> metadataBox;
 
   const ActiveTripScreen({
     super.key,
@@ -26,6 +32,7 @@ class ActiveTripScreen extends StatefulWidget {
     required this.riderWeightKg,
     required this.totalMassKg,
     required this.tileCacheDir,
+    required this.metadataBox,
     this.passengerWeightKg = 0,
   });
 
@@ -34,11 +41,11 @@ class ActiveTripScreen extends StatefulWidget {
 }
 
 class _ActiveTripScreenState extends State<ActiveTripScreen> {
+  DateTime? _tripStartTime;
   Duration _elapsed = Duration.zero;
   double _distanceKm = 0;
   double _rawSpeedKmh = 0;
   Timer? _clockTimer;
-  final _stopwatch = Stopwatch();
   bool _starting = true;
   String? _errorMessage;
   final List<LatLng> _routePoints = [];
@@ -46,10 +53,18 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> {
   @override
   void initState() {
     super.initState();
-    _startLogging();
+    // Going back no longer ends the ride (see dispose() below) — so
+    // opening this screen can mean either starting a fresh trip, or
+    // resuming one that's already running in the background via
+    // Home's "Active Ride" tile. Each needs different setup.
+    if (widget.logger.isLogging && widget.logger.activeTripId == widget.tripId) {
+      _resumeExistingTrip();
+    } else {
+      _startNewTrip();
+    }
   }
 
-  Future<void> _startLogging() async {
+  Future<void> _startNewTrip() async {
     try {
       await widget.logger.startTrip(
         tripId: widget.tripId,
@@ -57,10 +72,8 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> {
         passengerWeightKg: widget.passengerWeightKg,
         onSample: _onSample,
       );
-      _stopwatch.start();
-      _clockTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-        if (mounted) setState(() => _elapsed = _stopwatch.elapsed);
-      });
+      _tripStartTime = DateTime.now();
+      _startClock();
       setState(() => _starting = false);
     } on LocationPermissionDeniedException catch (e) {
       setState(() {
@@ -68,6 +81,49 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> {
         _errorMessage = e.message;
       });
     }
+  }
+
+  // Rebuilds this screen's local UI state (route, distance, elapsed
+  // time) from what TripLogger has already persisted while this
+  // screen was off-screen — the trip itself never stopped, only the
+  // widget showing it was gone.
+  void _resumeExistingTrip() {
+    final meta = widget.metadataBox.get(widget.tripId);
+    _tripStartTime = meta != null
+        ? DateTime.fromMillisecondsSinceEpoch(meta.startTimestampMs)
+        : DateTime.now();
+
+    final pastSamples = widget.logger.sampleBox.values
+        .where((s) => s.tripId == widget.tripId)
+        .toList()
+      ..sort((a, b) => a.timestampMs.compareTo(b.timestampMs));
+
+    var distanceKm = 0.0;
+    for (var i = 0; i < pastSamples.length; i++) {
+      final s = pastSamples[i];
+      _routePoints.add(LatLng(s.latitude, s.longitude));
+      if (i > 0) {
+        final dtSeconds =
+            (s.timestampMs - pastSamples[i - 1].timestampMs) / 1000.0;
+        if (dtSeconds > 0 && dtSeconds <= 30) {
+          distanceKm += s.gpsSpeedKmh * (dtSeconds / 3600.0);
+        }
+      }
+    }
+    _distanceKm = distanceKm;
+    if (pastSamples.isNotEmpty) _rawSpeedKmh = pastSamples.last.gpsSpeedKmh;
+
+    widget.logger.attachSampleCallback(_onSample);
+    _startClock();
+    setState(() => _starting = false);
+  }
+
+  void _startClock() {
+    _clockTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted && _tripStartTime != null) {
+        setState(() => _elapsed = DateTime.now().difference(_tripStartTime!));
+      }
+    });
   }
 
   // Real GPS -> engine wiring: every position update from TripLogger
@@ -98,10 +154,14 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> {
   @override
   void dispose() {
     _clockTimer?.cancel();
-    // Safety net: if the user backs out without tapping "End Ride",
-    // don't leave the GPS stream running in the background forever.
-    if (widget.logger.isLogging) {
-      widget.logger.stopTrip();
+    // Deliberately NOT stopping the trip here. Leaving this screen —
+    // including via the back button — should just navigate away while
+    // the ride keeps recording in the background (the persistent
+    // notification is what keeps GPS alive). Only "End Ride" stops it.
+    // Detach the callback so a disposed screen doesn't get setState
+    // called on it, but the trip itself carries on.
+    if (widget.logger.isLogging && widget.logger.activeTripId == widget.tripId) {
+      widget.logger.attachSampleCallback(null);
     }
     super.dispose();
   }
@@ -227,6 +287,10 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> {
     }
 
     final engine = widget.engine;
+    final batteryPercent = engine.batteryPercent();
+    final rangeKm = engine.estimatedRangeKmBaseline();
+    final maxRangeKm =
+        engine.profile.totalEnergyWh() / engine.profile.baseWhPerKm;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Active Ride')),
@@ -236,12 +300,13 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              BatteryTankGauge(
-                percent: engine.batteryPercent(),
-                rangeLabel:
-                    '~${engine.estimatedRangeKmBaseline().toStringAsFixed(0)} km remaining',
+              Center(
+                child: SpeedGauge(
+                  speedKmh: _rawSpeedKmh,
+                  maxSpeedKmh: engine.profile.topSpeedKmh,
+                ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
@@ -255,11 +320,6 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> {
                     value: _formatDuration(_elapsed),
                     icon: Icons.timer_outlined,
                   ),
-                  StatTile(
-                    label: 'Speed',
-                    value: '${_rawSpeedKmh.toStringAsFixed(0)} km/h',
-                    icon: Icons.speed,
-                  ),
                 ],
               ),
               const SizedBox(height: 16),
@@ -267,6 +327,33 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> {
                 routePoints: _routePoints,
                 currentPosition: _routePoints.isNotEmpty ? _routePoints.last : null,
                 tileCacheDir: widget.tileCacheDir,
+                interactive: false,
+                followCurrentPosition: true,
+              ),
+              const SizedBox(height: 20),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    children: [
+                      SegmentedBar(
+                        label: 'Charge Left',
+                        valueLabel: '${batteryPercent.toStringAsFixed(0)}%',
+                        fraction: batteryPercent / 100,
+                        color: TankColors.forPercent(batteryPercent),
+                        icon: Icons.battery_charging_full,
+                      ),
+                      const SizedBox(height: 16),
+                      SegmentedBar(
+                        label: 'Range Left',
+                        valueLabel: '${rangeKm.toStringAsFixed(0)} km',
+                        fraction: maxRangeKm > 0 ? rangeKm / maxRangeKm : 0,
+                        color: TankColors.forPercent(batteryPercent),
+                        icon: Icons.route_outlined,
+                      ),
+                    ],
+                  ),
+                ),
               ),
               const SizedBox(height: 20),
               Row(

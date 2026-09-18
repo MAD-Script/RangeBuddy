@@ -12,6 +12,7 @@ class VehicleCatalogEntry {
   final double batteryAh;
   final double motorWattPeak;
   final double vehicleWeightKg;
+  final double topSpeedKmh;
 
   const VehicleCatalogEntry({
     required this.brand,
@@ -20,6 +21,7 @@ class VehicleCatalogEntry {
     required this.batteryAh,
     required this.motorWattPeak,
     required this.vehicleWeightKg,
+    required this.topSpeedKmh,
   });
 
   String get displayName => '$brand $model';
@@ -33,6 +35,7 @@ const List<VehicleCatalogEntry> vehicleCatalog = [
     batteryAh: 23.0,
     motorWattPeak: 1200.0,
     vehicleWeightKg: 104.0, // midpoint of manufacturer's 103-105kg spec
+    topSpeedKmh: 50.0, // full-throttle spec, not your usual eco-mode cap
   ),
   // Add more models here as needed, grouped by brand in the picker
   // since it reads them in catalog order.
