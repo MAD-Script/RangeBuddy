@@ -2,14 +2,10 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
-import '../services/offline_tile_provider.dart';
-
-/// CARTO Basemap URLs — switches with the app's light/dark theme
-/// rather than being locked to dark always.
-const cartoLightTileUrl =
-    'https://basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png';
-const cartoDarkTileUrl =
-    'https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png';
+/// OpenStreetMap's standard raster tiles. This deliberately keeps map viewing
+/// key-free while the product's offline-download feature is on hold.
+const openStreetMapTileUrl =
+    'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 
 /// Shared route map used by both the active trip screen (live, locked
 /// to follow the current position, non-interactive) and the trip
@@ -68,7 +64,7 @@ class _TripRouteMapState extends State<TripRouteMap> {
             ? widget.routePoints.last
             : const LatLng(23.78, 90.40));
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final tileUrl = isDarkMode ? cartoDarkTileUrl : cartoLightTileUrl;
+    const tileUrl = openStreetMapTileUrl;
 
     return SizedBox(
       height: widget.height,
@@ -89,8 +85,12 @@ class _TripRouteMapState extends State<TripRouteMap> {
           children: [
             TileLayer(
               urlTemplate: tileUrl,
-              userAgentPackageName: 'com.evrangetracker.app',
-              tileProvider: OfflineFirstTileProvider(cacheDir: widget.tileCacheDir),
+              userAgentPackageName: 'com.madscript.rangebuddy',
+            ),
+            const RichAttributionWidget(
+              attributions: [
+                TextSourceAttribution('© OpenStreetMap contributors'),
+              ],
             ),
             if (widget.routePoints.length > 1)
               PolylineLayer(

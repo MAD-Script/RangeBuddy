@@ -43,7 +43,9 @@ class TripHistoryScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Trip History')),
+      appBar: AppBar(
+        title: const Text('Ride history', style: TextStyle(fontWeight: FontWeight.w800)),
+      ),
       body: ValueListenableBuilder(
         valueListenable: metadataBox.listenable(),
         builder: (context, Box<TripMetadata> box, _) {
@@ -51,23 +53,34 @@ class TripHistoryScreen extends StatelessWidget {
             ..sort((a, b) => b.startTimestampMs.compareTo(a.startTimestampMs));
 
           if (trips.isEmpty) {
-            return const Center(
+            return Center(
               child: Padding(
-                padding: EdgeInsets.all(32),
-                child: Text(
-                  'No rides logged yet. Start a ride from the Home tab '
-                  'to begin collecting data.',
-                  textAlign: TextAlign.center,
+                padding: const EdgeInsets.all(32),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.route_rounded, size: 48, color: Theme.of(context).colorScheme.primary),
+                    const SizedBox(height: 14),
+                    const Text('No rides yet', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+                    const SizedBox(height: 6),
+                    Text('Your completed rides will appear here.', textAlign: TextAlign.center, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                  ],
                 ),
               ),
             );
           }
 
           return ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: trips.length,
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+            itemCount: trips.length + 1,
             itemBuilder: (context, index) {
-              final trip = trips[index];
+              if (index == 0) {
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: Text('${trips.length} RECORDED RIDE${trips.length == 1 ? '' : 'S'}', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1.6, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                );
+              }
+              final trip = trips[index - 1];
               final start =
                   DateTime.fromMillisecondsSinceEpoch(trip.startTimestampMs);
               final durationLabel = trip.endTimestampMs != null
@@ -81,7 +94,8 @@ class TripHistoryScreen extends StatelessWidget {
 
               return Card(
                 margin: const EdgeInsets.only(bottom: 12),
-                child: ListTile(
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(24),
                   onTap: () => Navigator.push(
                     context,
                     MaterialPageRoute(
@@ -95,22 +109,38 @@ class TripHistoryScreen extends StatelessWidget {
                       ),
                     ),
                   ),
-                  leading: const Icon(Icons.electric_bike),
-                  title: Text(
-                    '${start.day}/${start.month}/${start.year} '
-                    '${start.hour.toString().padLeft(2, '0')}:'
-                    '${start.minute.toString().padLeft(2, '0')}',
-                  ),
-                  subtitle: Text(
-                    '$durationLabel · ${trip.startChargeType.name} → '
-                    '${trip.endChargeType.name}'
-                    '${trip.notes.isNotEmpty ? '\n${trip.notes}' : ''}',
-                  ),
-                  isThreeLine: trip.notes.isNotEmpty,
-                  trailing: IconButton(
-                    icon: const Icon(Icons.ios_share),
-                    tooltip: 'Export & share this trip\'s data',
-                    onPressed: () => _exportAndShare(context, trip.tripId),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 46,
+                          height: 46,
+                          decoration: BoxDecoration(color: Theme.of(context).colorScheme.primaryContainer, shape: BoxShape.circle),
+                          child: Icon(Icons.electric_bike_rounded, color: Theme.of(context).colorScheme.primary),
+                        ),
+                        const SizedBox(width: 13),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('${start.day.toString().padLeft(2, '0')}/${start.month.toString().padLeft(2, '0')}/${start.year}', style: const TextStyle(fontWeight: FontWeight.w900)),
+                              const SizedBox(height: 3),
+                              Text('$durationLabel  ·  ${trip.startChargeType.name} → ${trip.endChargeType.name}', style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                              if (trip.notes.isNotEmpty) ...[
+                                const SizedBox(height: 4),
+                                Text(trip.notes, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                              ],
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.ios_share_rounded),
+                          tooltip: 'Export this ride',
+                          onPressed: () => _exportAndShare(context, trip.tripId),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               );

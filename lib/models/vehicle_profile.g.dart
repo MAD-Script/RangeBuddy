@@ -31,13 +31,15 @@ class VehicleProfileAdapter extends TypeAdapter<VehicleProfile> {
       congestionOverheadWhPerKm: fields[11] as double,
       congestionSpeedThresholdKmh: fields[12] as double,
       topSpeedKmh: fields[13] as double,
+      isVerified: fields[14] as bool,
+      catalogId: fields[15] as String?,
     );
   }
 
   @override
   void write(BinaryWriter writer, VehicleProfile obj) {
     writer
-      ..writeByte(14)
+      ..writeByte(16)
       ..writeByte(0)
       ..write(obj.name)
       ..writeByte(1)
@@ -65,7 +67,11 @@ class VehicleProfileAdapter extends TypeAdapter<VehicleProfile> {
       ..writeByte(12)
       ..write(obj.congestionSpeedThresholdKmh)
       ..writeByte(13)
-      ..write(obj.topSpeedKmh);
+      ..write(obj.topSpeedKmh)
+      ..writeByte(14)
+      ..write(obj.isVerified)
+      ..writeByte(15)
+      ..write(obj.catalogId);
   }
 
   @override

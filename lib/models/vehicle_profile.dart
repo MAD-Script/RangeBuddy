@@ -70,6 +70,14 @@ class VehicleProfile extends HiveObject {
   @HiveField(13)
   double topSpeedKmh;
 
+  /// Official catalog profiles are curated; manual profiles remain usable but
+  /// are visibly marked as estimates until a matching catalog entry exists.
+  @HiveField(14)
+  bool isVerified;
+
+  @HiveField(15)
+  String? catalogId;
+
   VehicleProfile({
     this.name = 'TailG F52 Red Rabbit',
     this.systemVoltage = 72.0,
@@ -84,7 +92,9 @@ class VehicleProfile extends HiveObject {
     this.defaultRiderWeightKg = 68.0,
     this.congestionOverheadWhPerKm = 6.5,
     this.congestionSpeedThresholdKmh = 25.0,
-    this.topSpeedKmh = 50.0,
+    this.topSpeedKmh = 55.0,
+    this.isVerified = true,
+    this.catalogId = 'tailg-f52-red-rabbit',
   });
 
   double totalEnergyWh() => systemVoltage * batteryAh * socHealthFactor;

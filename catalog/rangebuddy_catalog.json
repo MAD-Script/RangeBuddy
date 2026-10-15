@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "bikes": [
+    {
+      "id": "tailg-f52-red-rabbit",
+      "brand": "TailG",
+      "model": "F52 Red Rabbit",
+      "system_voltage": 72,
+      "battery_ah": 23,
+      "motor_watt_peak": 1200,
+      "vehicle_weight_kg": 104,
+      "top_speed_kmh": 55
+    }
+  ]
+}

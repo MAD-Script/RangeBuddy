@@ -10,6 +10,10 @@ import 'models/trip_metadata.dart';
 import 'models/bar_drop_event.dart';
 import 'models/vehicle_alert_event.dart';
 import 'models/passenger.dart';
+import 'models/battery_state.dart';
+import 'models/charger_profile.dart';
+import 'models/charge_session.dart';
+import 'models/charging_place.dart';
 import 'services/range_engine.dart';
 import 'services/trip_logger.dart';
 import 'services/trip_foreground_task.dart';
@@ -18,6 +22,7 @@ import 'screens/home_screen.dart';
 import 'screens/active_trip_screen.dart';
 import 'screens/trip_history_screen.dart';
 import 'screens/vehicle_setup_screen.dart';
+import 'screens/charging_screen.dart';
 
 late Box<VehicleProfile> profileBox;
 late Box<TripSample> sampleBox;
@@ -25,6 +30,11 @@ late Box<TripMetadata> metadataBox;
 late Box<BarDropEvent> barDropBox;
 late Box<VehicleAlertEvent> alertBox;
 late Box<Passenger> passengerBox;
+late Box<BatteryState> batteryStateBox;
+late Box<ChargerProfile> chargerBox;
+late Box<ChargeSession> chargeSessionBox;
+late Box<ChargingPlace> chargingPlaceBox;
+late Box<String> appSettingsBox;
 late Directory tileCacheDir;
 
 Future<void> main() async {
@@ -39,6 +49,10 @@ Future<void> main() async {
   Hive.registerAdapter(VehicleAlertTypeAdapter());
   Hive.registerAdapter(VehicleAlertEventAdapter());
   Hive.registerAdapter(PassengerAdapter());
+  Hive.registerAdapter(BatteryStateAdapter());
+  Hive.registerAdapter(ChargerProfileAdapter());
+  Hive.registerAdapter(ChargeSessionAdapter());
+  Hive.registerAdapter(ChargingPlaceAdapter());
 
   profileBox = await Hive.openBox<VehicleProfile>('vehicle_profile');
   sampleBox = await Hive.openBox<TripSample>('trip_samples');
@@ -46,29 +60,44 @@ Future<void> main() async {
   barDropBox = await Hive.openBox<BarDropEvent>('bar_drop_events');
   alertBox = await Hive.openBox<VehicleAlertEvent>('alert_events');
   passengerBox = await Hive.openBox<Passenger>('passengers');
+  batteryStateBox = await Hive.openBox<BatteryState>('battery_states');
+  chargerBox = await Hive.openBox<ChargerProfile>('chargers');
+  chargeSessionBox = await Hive.openBox<ChargeSession>('charge_sessions');
+  chargingPlaceBox = await Hive.openBox<ChargingPlace>('charging_places');
+  appSettingsBox = await Hive.openBox<String>('app_settings');
 
   if (profileBox.isEmpty) {
     await profileBox.add(VehicleProfile()); // F52 defaults
+  } else {
+    // Existing installs used the older 50 km/h catalog value. Bring the
+    // bundled F52 profile in line with its 55 km/h rated sport specification.
+    final savedProfile = profileBox.values.first;
+    if (savedProfile.name == 'TailG F52 Red Rabbit' &&
+        savedProfile.topSpeedKmh < 55) {
+      savedProfile.topSpeedKmh = 55;
+      await savedProfile.save();
+    }
   }
 
   final docsDir = await getApplicationDocumentsDirectory();
-  tileCacheDir = docsDir; // OfflineFirstTileProvider nests under map_tiles/
+  // Retained for route/map widgets while offline map downloads are on hold.
+  tileCacheDir = docsDir;
 
   // Required before runApp() for the foreground service's isolate
   // communication to work (see trip_foreground_task.dart).
   FlutterForegroundTask.initCommunicationPort();
   initTripForegroundTask();
 
-  runApp(const EvRangeTrackerApp());
+  runApp(const RangeBuddyApp());
 }
 
-class EvRangeTrackerApp extends StatelessWidget {
-  const EvRangeTrackerApp({super.key});
+class RangeBuddyApp extends StatelessWidget {
+  const RangeBuddyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'EV Range Tracker',
+      title: 'RangeBuddy',
       theme: buildAppTheme(null, Brightness.light),
       darkTheme: buildAppTheme(null, Brightness.dark),
       home: const RootShell(),
@@ -88,12 +117,14 @@ class _ActiveRideParams {
   final double riderWeightKg;
   final double passengerWeightKg;
   final double totalMassKg;
+  final bool isCalibrationRide;
 
   const _ActiveRideParams({
     required this.tripId,
     required this.riderWeightKg,
     required this.passengerWeightKg,
     required this.totalMassKg,
+    this.isCalibrationRide = false,
   });
 }
 
@@ -101,8 +132,9 @@ class _RootShellState extends State<RootShell> {
   int _tabIndex = 0;
   double _selectedPassengerWeightKg = 0;
   _ActiveRideParams? _activeRide;
-  late final VehicleProfile _profile = profileBox.values.first;
-  late final RangeEngine _engine = RangeEngine(profile: _profile);
+  late VehicleProfile _profile;
+  late RangeEngine _engine;
+  late String _profileKey;
   late final TripLogger _logger = TripLogger(
     sampleBox: sampleBox,
     metadataBox: metadataBox,
@@ -110,7 +142,48 @@ class _RootShellState extends State<RootShell> {
     alertBox: alertBox,
   );
 
-  Future<void> _startRide() async {
+  @override
+  void initState() {
+    super.initState();
+    _loadSelectedProfile();
+  }
+
+  void _loadSelectedProfile([String? requestedKey]) {
+    final selectedKey = requestedKey ??
+        appSettingsBox.get('selected_profile_key') ??
+        profileBox.keys.first.toString();
+    final hiveKey = profileBox.keys.firstWhere(
+      (key) => key.toString() == selectedKey,
+      orElse: () => profileBox.keys.first,
+    );
+    _profileKey = hiveKey.toString();
+    _profile = profileBox.get(hiveKey)!;
+    final state = batteryStateBox.get(_profileKey);
+    _engine = RangeEngine(profile: _profile, startingWh: state?.remainingWh);
+    appSettingsBox.put('selected_profile_key', _profileKey);
+  }
+
+  void _persistBattery({bool fullCharge = false}) {
+    final previous = batteryStateBox.get(_profileKey);
+    batteryStateBox.put(
+      _profileKey,
+      BatteryState(
+        profileKey: _profileKey,
+        remainingWh: _engine.eRemainingWh,
+        lastUpdatedMs: DateTime.now().millisecondsSinceEpoch,
+        lastFullChargeMs: fullCharge
+            ? DateTime.now().millisecondsSinceEpoch
+            : previous?.lastFullChargeMs,
+        confidence: fullCharge ? .8 : previous?.confidence ?? .45,
+      ),
+    );
+  }
+
+  void _switchProfile(String key) {
+    setState(() => _loadSelectedProfile(key));
+  }
+
+  Future<void> _startRide({bool calibration = false}) async {
     final tripId = DateTime.now().millisecondsSinceEpoch.toString();
     final totalMassKg = _profile.vehicleWeightKg +
         _profile.defaultRiderWeightKg +
@@ -120,6 +193,7 @@ class _RootShellState extends State<RootShell> {
       riderWeightKg: _profile.defaultRiderWeightKg,
       passengerWeightKg: _selectedPassengerWeightKg,
       totalMassKg: totalMassKg,
+      isCalibrationRide: calibration,
     );
     await _openActiveTripScreen();
   }
@@ -143,6 +217,10 @@ class _RootShellState extends State<RootShell> {
           totalMassKg: ride.totalMassKg,
           tileCacheDir: tileCacheDir,
           metadataBox: metadataBox,
+          onBatteryChanged: _persistBattery,
+          chargingPlaceBox: chargingPlaceBox,
+          profileKey: _profileKey,
+          isCalibrationRide: ride.isCalibrationRide,
         ),
       ),
     );
@@ -174,7 +252,33 @@ class _RootShellState extends State<RootShell> {
         logger: _logger,
         tileCacheDir: tileCacheDir,
       ),
-      VehicleSetupScreen(profile: _profile, tileCacheDir: tileCacheDir),
+      ChargingScreen(
+        profile: _profile,
+        profileKey: _profileKey,
+        engine: _engine,
+        chargerBox: chargerBox,
+        sessionBox: chargeSessionBox,
+        placeBox: chargingPlaceBox,
+        onBatteryChanged: _persistBattery,
+        tileCacheDir: tileCacheDir,
+      ),
+      VehicleSetupScreen(
+        profile: _profile,
+        profileBox: profileBox,
+        selectedProfileKey: _profileKey,
+        onProfileSelected: _switchProfile,
+        appSettingsBox: appSettingsBox,
+        profileKey: _profileKey,
+        batteryStateBox: batteryStateBox,
+        chargeSessionBox: chargeSessionBox,
+        onStartCalibration: () => _startRide(calibration: true),
+        onConfirmFullCharge: () {
+          _engine.resetToFull();
+          _persistBattery(fullCharge: true);
+          setState(() {});
+        },
+        tileCacheDir: tileCacheDir,
+      ),
     ];
 
     return Scaffold(
@@ -185,6 +289,7 @@ class _RootShellState extends State<RootShell> {
         destinations: const [
           NavigationDestination(icon: Icon(Icons.home_outlined), label: 'Home'),
           NavigationDestination(icon: Icon(Icons.history), label: 'History'),
+          NavigationDestination(icon: Icon(Icons.bolt_outlined), label: 'Charge'),
           NavigationDestination(
             icon: Icon(Icons.settings_outlined),
             label: 'Settings',

@@ -3,7 +3,6 @@ import 'package:hive_flutter/hive_flutter.dart';
 import '../models/passenger.dart';
 import '../models/vehicle_profile.dart';
 import '../services/range_engine.dart';
-import '../widgets/battery_gauge.dart';
 
 class HomeScreen extends StatefulWidget {
   final RangeEngine engine;
@@ -158,81 +157,36 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Center(
-                child: Text(
-                  'ESTIMATED RANGE',
-                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 2.2),
-                ),
-              ),
-              const SizedBox(height: 4),
-              Center(
-                child: RichText(
-                  text: TextSpan(
-                    style: TextStyle(color: scheme.onSurface),
-                    children: [
-                      TextSpan(
-                        text: rangeKm.toStringAsFixed(0),
-                        style: const TextStyle(fontSize: 76, height: .95, fontWeight: FontWeight.w900, letterSpacing: -3),
-                      ),
-                      TextSpan(
-                        text: ' km',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: scheme.onSurfaceVariant),
-                      ),
-                    ],
+              Row(
+                children: [
+                  Expanded(
+                    child: _TopEstimate(
+                      label: 'ESTIMATED RANGE',
+                      value: rangeKm.toStringAsFixed(0),
+                      unit: 'km',
+                    ),
                   ),
-                ),
+                  Container(width: 1, height: 66, color: scheme.outlineVariant),
+                  Expanded(
+                    child: _TopEstimate(
+                      label: 'ESTIMATED CHARGE LEFT',
+                      value: batteryPercent.toStringAsFixed(0),
+                      unit: '%',
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 6),
               Center(
                 child: Text(
-                  batteryPercent < 20 ? 'Charge soon for a confident trip' : 'Ready for the road',
+                  !widget.profile.isVerified
+                      ? 'Unverified bike profile — calibrate from real charges and rides'
+                      : batteryPercent < 20
+                          ? 'Charge soon for a confident trip'
+                          : 'Ready for the road',
+                  textAlign: TextAlign.center,
                   style: TextStyle(color: scheme.onSurfaceVariant),
                 ),
-              ),
-              const SizedBox(height: 18),
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 18,
-                  ),
-                  child: BatteryTankGauge(
-                    percent: batteryPercent,
-                    rangeLabel: '${batteryPercent.toStringAsFixed(0)}% charge available',
-                    isEstimateUncertain: batteryPercent < 20,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Text('VEHICLE SNAPSHOT', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1.6, color: scheme.onSurfaceVariant)),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                    child: _MetricCard(
-                      label: 'SYSTEM',
-                      value: '${widget.profile.systemVoltage.toStringAsFixed(0)}V',
-                      icon: Icons.bolt_rounded,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _MetricCard(
-                      label: 'CAPACITY',
-                      value: '${widget.profile.batteryAh.toStringAsFixed(0)}Ah',
-                      icon: Icons.battery_charging_full_rounded,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _MetricCard(
-                      label: 'HEALTH',
-                      value:
-                          '${(widget.profile.socHealthFactor * 100).toStringAsFixed(0)}%',
-                      icon: Icons.favorite_rounded,
-                    ),
-                  ),
-                ],
               ),
               const SizedBox(height: 26),
               Text('RIDE SETUP', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1.6, color: scheme.onSurfaceVariant)),
@@ -284,6 +238,18 @@ class _HomeScreenState extends State<HomeScreen> {
                   );
                 },
               ),
+              const SizedBox(height: 16),
+              Card(
+                child: ListTile(
+                  leading: Icon(Icons.favorite_rounded, color: scheme.primary),
+                  title: const Text('Battery health', style: TextStyle(fontWeight: FontWeight.w800)),
+                  subtitle: const Text('Estimated usable battery capacity'),
+                  trailing: Text(
+                    '${(widget.profile.socHealthFactor * 100).toStringAsFixed(0)}%',
+                    style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900),
+                  ),
+                ),
+              ),
               const SizedBox(height: 24),
               FilledButton.icon(
                 onPressed: widget.isRideActive ? null : widget.onStartRide,
@@ -320,12 +286,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
               ],
-              const SizedBox(height: 14),
-              OutlinedButton.icon(
-                onPressed: () => setState(engine.resetToFull),
-                icon: const Icon(Icons.battery_charging_full),
-                label: const Text('Fully Charged'),
-              ),
             ],
           ),
         ),
@@ -357,6 +317,71 @@ class _MetricCard extends StatelessWidget {
             Text(label, style: TextStyle(fontSize: 9, letterSpacing: .8, fontWeight: FontWeight.w700, color: scheme.onSurfaceVariant)),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _TopEstimate extends StatelessWidget {
+  final String label;
+  final String value;
+  final String unit;
+
+  const _TopEstimate({
+    required this.label,
+    required this.value,
+    required this.unit,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Column(
+      children: [
+        Text(label, textAlign: TextAlign.center, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, letterSpacing: 1.15, color: scheme.onSurfaceVariant)),
+        const SizedBox(height: 5),
+        RichText(text: TextSpan(style: TextStyle(color: scheme.onSurface), children: [
+          TextSpan(text: value, style: const TextStyle(fontSize: 52, height: .95, fontWeight: FontWeight.w900, letterSpacing: -2)),
+          TextSpan(text: unit, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: scheme.onSurfaceVariant)),
+        ])),
+      ],
+    );
+  }
+}
+
+class _EnergySummary extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color color;
+
+  const _EnergySummary({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      child: Column(
+        children: [
+          Icon(icon, size: 18, color: color),
+          const SizedBox(height: 5),
+          Text(value, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 9,
+              letterSpacing: 1,
+              fontWeight: FontWeight.w800,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
       ),
     );
   }

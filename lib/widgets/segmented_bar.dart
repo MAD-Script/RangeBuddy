@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// A segmented pill-style progress bar — a row of rounded blocks,
-/// filled up to [fraction] in [color], the rest dimmed. Used for
-/// Charge Left / Range Left on the active ride screen.
+/// Slanted energy segments inspired by the reference dashboard.
 class SegmentedBar extends StatelessWidget {
   final String label;
   final String valueLabel;
@@ -27,9 +25,10 @@ class SegmentedBar extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
 
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
             if (icon != null) ...[
               Icon(icon, size: 16, color: scheme.onSurfaceVariant),
@@ -37,7 +36,12 @@ class SegmentedBar extends StatelessWidget {
             ],
             Text(
               label,
-              style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant),
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                letterSpacing: .8,
+                color: scheme.onSurfaceVariant,
+              ),
             ),
           ],
         ),
@@ -50,10 +54,14 @@ class SegmentedBar extends StatelessWidget {
                   margin: EdgeInsets.only(
                     right: i == segmentCount - 1 ? 0 : 4,
                   ),
-                  height: 20,
-                  decoration: BoxDecoration(
-                    color: i < filled ? color : scheme.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(6),
+                  height: 28,
+                  child: ClipPath(
+                    clipper: const _TrapezoidClipper(),
+                    child: ColoredBox(
+                      color: i < filled
+                          ? color
+                          : scheme.surfaceContainerHighest,
+                    ),
                   ),
                 ),
               ),
@@ -65,9 +73,24 @@ class SegmentedBar extends StatelessWidget {
           style: Theme.of(context)
               .textTheme
               .titleMedium
-              ?.copyWith(fontWeight: FontWeight.w600),
+              ?.copyWith(fontWeight: FontWeight.w800),
         ),
       ],
     );
   }
+}
+
+class _TrapezoidClipper extends CustomClipper<Path> {
+  const _TrapezoidClipper();
+
+  @override
+  Path getClip(Size size) => Path()
+    ..moveTo(size.width * .16, 0)
+    ..lineTo(size.width, 0)
+    ..lineTo(size.width * .84, size.height)
+    ..lineTo(0, size.height)
+    ..close();
+
+  @override
+  bool shouldReclip(covariant _TrapezoidClipper oldClipper) => false;
 }

@@ -6,6 +6,7 @@ import 'package:latlong2/latlong.dart';
 import '../models/trip_metadata.dart';
 import '../models/trip_sample.dart';
 import '../models/vehicle_alert_event.dart';
+import '../models/charging_place.dart';
 import '../services/range_engine.dart';
 import '../services/trip_logger.dart';
 import '../theme/app_theme.dart';
@@ -22,6 +23,10 @@ class ActiveTripScreen extends StatefulWidget {
   final double totalMassKg;
   final Directory tileCacheDir;
   final Box<TripMetadata> metadataBox;
+  final VoidCallback? onBatteryChanged;
+  final Box<ChargingPlace>? chargingPlaceBox;
+  final String? profileKey;
+  final bool isCalibrationRide;
 
   const ActiveTripScreen({
     super.key,
@@ -32,6 +37,10 @@ class ActiveTripScreen extends StatefulWidget {
     required this.totalMassKg,
     required this.tileCacheDir,
     required this.metadataBox,
+    this.onBatteryChanged,
+    this.chargingPlaceBox,
+    this.profileKey,
+    this.isCalibrationRide = false,
     this.passengerWeightKg = 0,
   });
 
@@ -141,6 +150,7 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> {
       totalMassKg: widget.totalMassKg,
       dtSeconds: dtSeconds,
     );
+    widget.onBatteryChanged?.call();
     _distanceKm += rawSpeedKmh * (dtSeconds / 3600.0);
     if (mounted) {
       setState(() {
@@ -251,6 +261,29 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> {
     return '${d.inHours}:$m:$s';
   }
 
+  _Reachability? _nearestReachablePlace(double rangeKm) {
+    if (_routePoints.isEmpty ||
+        widget.chargingPlaceBox == null ||
+        widget.profileKey == null) {
+      return null;
+    }
+    final current = _routePoints.last;
+    final distance = const Distance();
+    final candidates = widget.chargingPlaceBox!.values
+        .where((place) => place.profileKey == widget.profileKey)
+        .map((place) {
+      final directKm = distance.as(
+        LengthUnit.Kilometer,
+        current,
+        LatLng(place.latitude, place.longitude),
+      );
+      return _Reachability(place, directKm * 1.35 + 5);
+    }).toList()
+      ..sort((a, b) => a.requiredRangeKm.compareTo(b.requiredRangeKm));
+    if (candidates.isEmpty) return null;
+    return candidates.first;
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_starting) {
@@ -290,6 +323,7 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> {
     final rangeKm = engine.estimatedRangeKmBaseline();
     final maxRangeKm =
         engine.profile.totalEnergyWh() / engine.profile.baseWhPerKm;
+    final nearestPlace = _nearestReachablePlace(rangeKm);
 
     return Scaffold(
       appBar: AppBar(
@@ -316,15 +350,41 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> {
               Center(
                 child: SpeedGauge(
                   speedKmh: _rawSpeedKmh,
-                  maxSpeedKmh: engine.profile.topSpeedKmh,
+                  maxSpeedKmh: 60,
                 ),
               ),
               Text(
-                'DOTS FILL AS YOU APPROACH ${engine.profile.topSpeedKmh.toStringAsFixed(0)} KM/H',
+                'ECO 0–40  ·  CITY 0–45  ·  SPORT 0–55  ·  RED ABOVE 55',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 1.1, color: Theme.of(context).colorScheme.onSurfaceVariant),
               ),
               const SizedBox(height: 18),
+              if (nearestPlace != null)
+                Card(
+                  color: rangeKm >= nearestPlace.requiredRangeKm
+                      ? Theme.of(context).colorScheme.primaryContainer
+                      : Theme.of(context).colorScheme.errorContainer,
+                  child: ListTile(
+                    leading: Icon(
+                      rangeKm >= nearestPlace.requiredRangeKm
+                          ? Icons.location_on_rounded
+                          : Icons.warning_amber_rounded,
+                    ),
+                    title: Text(
+                      rangeKm >= nearestPlace.requiredRangeKm
+                          ? '${nearestPlace.place.name} is safely reachable'
+                          : '${nearestPlace.place.name} is not safely reachable',
+                      style: const TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                    subtitle: Text(
+                      'Needs ~${nearestPlace.requiredRangeKm.toStringAsFixed(0)} km including route and reserve buffer.',
+                    ),
+                  ),
+                ),
+              if (nearestPlace == null && _routePoints.isNotEmpty)
+                const _NoSavedPlaceNotice(),
+              if (nearestPlace != null || _routePoints.isNotEmpty)
+                const SizedBox(height: 16),
               Row(
                 children: [
                   Expanded(child: _RideMetric(
@@ -372,48 +432,48 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> {
               Card(
                 child: Padding(
                   padding: const EdgeInsets.all(18),
-                  child: Column(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      SegmentedBar(
-                        label: 'Charge Left',
-                        valueLabel: '${batteryPercent.toStringAsFixed(0)}%',
-                        fraction: batteryPercent / 100,
-                        color: TankColors.forPercent(batteryPercent),
-                        icon: Icons.battery_charging_full,
+                      Expanded(
+                        child: SegmentedBar(
+                          label: 'Charge Left',
+                          valueLabel: '${batteryPercent.toStringAsFixed(0)}%',
+                          fraction: batteryPercent / 100,
+                          color: TankColors.forPercent(batteryPercent),
+                          icon: Icons.battery_charging_full,
+                        ),
                       ),
-                      const SizedBox(height: 16),
-                      SegmentedBar(
-                        label: 'Range Left',
-                        valueLabel: '${rangeKm.toStringAsFixed(0)} km',
-                        fraction: maxRangeKm > 0 ? rangeKm / maxRangeKm : 0,
-                        color: TankColors.forPercent(batteryPercent),
-                        icon: Icons.route_outlined,
+                      Container(
+                        width: 1,
+                        height: 92,
+                        margin: const EdgeInsets.symmetric(horizontal: 14),
+                        color: Theme.of(context).colorScheme.outlineVariant,
+                      ),
+                      Expanded(
+                        child: SegmentedBar(
+                          label: 'Range Left',
+                          valueLabel: '${rangeKm.toStringAsFixed(0)} km',
+                          fraction: maxRangeKm > 0 ? rangeKm / maxRangeKm : 0,
+                          color: TankColors.forPercent(batteryPercent),
+                          icon: Icons.route_outlined,
+                        ),
                       ),
                     ],
                   ),
                 ),
               ),
-              const SizedBox(height: 18),
-              Row(
-                children: [
-                  Expanded(
-                    child: FilledButton.icon(
-                      onPressed: _promptBarDrop,
-                      icon: const Icon(Icons.flag_outlined),
-                      label: const Text('Bar Dropped'),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: FilledButton.tonalIcon(
-                      onPressed: _promptAlertEvent,
-                      icon: const Icon(Icons.warning_amber_outlined),
-                      label: const Text('Log Alert'),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
+              if (widget.isCalibrationRide) ...[
+                const SizedBox(height: 18),
+                Row(
+                  children: [
+                    Expanded(child: FilledButton.icon(onPressed: _promptBarDrop, icon: const Icon(Icons.flag_outlined), label: const Text('Bar Dropped'))),
+                    const SizedBox(width: 12),
+                    Expanded(child: FilledButton.tonalIcon(onPressed: _promptAlertEvent, icon: const Icon(Icons.warning_amber_outlined), label: const Text('Log Alert'))),
+                  ],
+                ),
+                const SizedBox(height: 12),
+              ],
               OutlinedButton.icon(
                 onPressed: _endRide,
                 icon: const Icon(Icons.stop_circle_outlined),
@@ -464,4 +524,23 @@ class _RideMetric extends StatelessWidget {
       ),
     );
   }
+}
+
+class _Reachability {
+  final ChargingPlace place;
+  final double requiredRangeKm;
+  const _Reachability(this.place, this.requiredRangeKm);
+}
+
+class _NoSavedPlaceNotice extends StatelessWidget {
+  const _NoSavedPlaceNotice();
+
+  @override
+  Widget build(BuildContext context) => Card(
+        child: const ListTile(
+          leading: Icon(Icons.location_off_outlined),
+          title: Text('No saved charging places'),
+          subtitle: Text('Add Home, free, or paid places from the Charge tab.'),
+        ),
+      );
 }
