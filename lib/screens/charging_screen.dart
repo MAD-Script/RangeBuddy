@@ -216,16 +216,18 @@ class ChargingScreen extends StatelessWidget {
     if (input == null || input.isEmpty) return null;
     try {
       var uri = Uri.parse(input);
+      String responseBody = '';
       if (uri.host.contains('goo.gl') || uri.host.contains('google.com')) {
-        final response = await http.get(uri);
+        final request = http.Request('GET', uri)
+          ..headers['User-Agent'] = 'RangeBuddy/1.0 (location picker)'
+          ..headers['Accept'] = 'text/html,application/xhtml+xml';
+        final response = await http.Client().send(request);
         uri = response.request?.url ?? uri;
+        responseBody = await response.stream.bytesToString();
       }
-      final text = uri.toString();
-      final match = RegExp(r'@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)|!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)|[?&]q=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)').firstMatch(text);
-      if (match == null) throw const FormatException('No coordinates found');
-      final lat = double.parse(match.group(1) ?? match.group(3) ?? match.group(5)!);
-      final lng = double.parse(match.group(2) ?? match.group(4) ?? match.group(6)!);
-      return LatLng(lat, lng);
+      final location = _locationFromGoogleMapText('$uri\n$responseBody');
+      if (location == null) throw const FormatException('No coordinates found');
+      return location;
     } catch (_) {
       if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not read a location from that Google Maps link.')));
       return null;
@@ -234,12 +236,20 @@ class ChargingScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final sessions = sessionBox.values.where((s) => s.profileKey == profileKey).toList().reversed.toList();
-    final places = placeBox.values.where((p) => p.profileKey == profileKey).toList();
     return Scaffold(
       appBar: AppBar(title: const Text('Charge', style: TextStyle(fontWeight: FontWeight.w800))),
       floatingActionButton: FloatingActionButton.extended(onPressed: () => _addCharge(context), icon: const Icon(Icons.add), label: const Text('Log charge')),
-      body: ListView(padding: const EdgeInsets.fromLTRB(20, 8, 20, 96), children: [
+      body: AnimatedBuilder(
+        animation: Listenable.merge([
+          chargerBox.listenable(),
+          sessionBox.listenable(),
+          placeBox.listenable(),
+        ]),
+        builder: (context, _) {
+          final sessions = sessionBox.values.where((s) => s.profileKey == profileKey).toList().reversed.toList();
+          final places = placeBox.values.where((p) => p.profileKey == profileKey).toList();
+          final chargers = chargerBox.values.where((c) => c.profileKey == profileKey).toList();
+          return ListView(padding: const EdgeInsets.fromLTRB(20, 8, 20, 96), children: [
         Card(child: Padding(padding: const EdgeInsets.all(18), child: Row(children: [
           Icon(Icons.battery_charging_full_rounded, color: Theme.of(context).colorScheme.primary),
           const SizedBox(width: 12),
@@ -250,22 +260,32 @@ class ChargingScreen extends StatelessWidget {
         ]))),
         const SizedBox(height: 20),
         Row(children: [
-          Expanded(child: _Heading(label: 'SAVED CHARGERS', action: '${chargerBox.values.where((c) => c.profileKey == profileKey).length} saved')),
+          Expanded(child: _Heading(label: 'SAVED CHARGERS', action: '${chargers.length} saved')),
           TextButton.icon(onPressed: () => _configureCharger(context), icon: const Icon(Icons.tune, size: 17), label: const Text('Set up')),
         ]),
-        if (chargerBox.values.where((c) => c.profileKey == profileKey).isEmpty)
+        if (chargers.isEmpty)
           const _EmptyCard(icon: Icons.power_outlined, text: 'Set up your charger once so each charge log only needs its duration.'),
-        for (final charger in chargerBox.values.where((c) => c.profileKey == profileKey))
-          Card(child: ListTile(
-            leading: const Icon(Icons.power_outlined),
-            title: Text(charger.name),
-            subtitle: Text('${charger.wattage.toStringAsFixed(0)} W · ${(charger.efficiency * 100).toStringAsFixed(0)}% efficient'),
-            trailing: charger.isDefault ? const Text('DEFAULT') : null,
-          )),
+        for (final charger in chargers)
+          _DeleteOnSwipe(
+            dismissKey: ValueKey('charger-${charger.key}'),
+            label: charger.name,
+            onDelete: () => charger.delete(),
+            child: Card(child: ListTile(
+              leading: const Icon(Icons.power_outlined),
+              title: Text(charger.name),
+              subtitle: Text('${charger.wattage.toStringAsFixed(0)} W · ${(charger.efficiency * 100).toStringAsFixed(0)}% efficient'),
+              trailing: charger.isDefault ? const Text('DEFAULT') : null,
+            )),
+          ),
         const SizedBox(height: 16),
         Row(children: [Expanded(child: _Heading(label: 'SAVED CHARGING PLACES', action: '${places.length} saved')), TextButton.icon(onPressed: () => _addPlace(context), icon: const Icon(Icons.add, size: 17), label: const Text('Add'))]),
         if (places.isEmpty) _EmptyCard(icon: Icons.location_on_outlined, text: 'Save Home, free, or paid charging places to plan your range.'),
-        for (final place in places) Card(child: ListTile(leading: Icon(place.isFree ? Icons.home_rounded : Icons.payments_outlined), title: Text(place.name), subtitle: Text(place.isFree ? 'Free charging' : 'Paid charging'))),
+        for (final place in places) _DeleteOnSwipe(
+          dismissKey: ValueKey('place-${place.key}'),
+          label: place.name,
+          onDelete: () => place.delete(),
+          child: Card(child: ListTile(leading: Icon(place.isFree ? Icons.home_rounded : Icons.payments_outlined), title: Text(place.name), subtitle: Text(place.isFree ? 'Free charging' : 'Paid charging'))),
+        ),
         const SizedBox(height: 16),
         _Heading(label: 'CHARGING HISTORY', action: '${sessions.length} sessions'),
         if (sessions.isEmpty) const _EmptyCard(icon: Icons.history_rounded, text: 'Log a charge to update your virtual battery.'),
@@ -275,7 +295,9 @@ class ChargingScreen extends StatelessWidget {
           subtitle: Text('${session.hours.toStringAsFixed(1)} h · ${session.recoveredWh.toStringAsFixed(0)} Wh recovered'),
           trailing: Text('+${(session.recoveredWh / profile.baseWhPerKm).toStringAsFixed(0)} km', style: const TextStyle(fontWeight: FontWeight.w900)),
         )),
-      ]),
+          ]);
+        },
+      ),
     );
   }
 }
@@ -285,3 +307,84 @@ class _PlaceInput { final String name; final double latitude; final double longi
 enum _PlaceMethod { map, googleLink }
 class _Heading extends StatelessWidget { final String label; final String action; const _Heading({required this.label, required this.action}); @override Widget build(BuildContext context) => Row(children: [Text(label, style: TextStyle(fontSize: 11, letterSpacing: 1.4, fontWeight: FontWeight.w800, color: Theme.of(context).colorScheme.onSurfaceVariant)), const Spacer(), Text(action, style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant))]); }
 class _EmptyCard extends StatelessWidget { final IconData icon; final String text; const _EmptyCard({required this.icon, required this.text}); @override Widget build(BuildContext context) => Card(child: Padding(padding: const EdgeInsets.all(18), child: Row(children: [Icon(icon), const SizedBox(width: 12), Expanded(child: Text(text, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)))]))); }
+
+class _DeleteOnSwipe extends StatelessWidget {
+  final Key dismissKey;
+  final String label;
+  final Future<void> Function() onDelete;
+  final Widget child;
+
+  const _DeleteOnSwipe({required this.dismissKey, required this.label, required this.onDelete, required this.child});
+
+  @override
+  Widget build(BuildContext context) => Dismissible(
+    key: dismissKey,
+    direction: DismissDirection.endToStart,
+    background: Container(
+      alignment: Alignment.centerRight,
+      padding: const EdgeInsets.only(right: 24),
+      decoration: BoxDecoration(color: Theme.of(context).colorScheme.error, borderRadius: BorderRadius.circular(12)),
+      child: Icon(Icons.delete_outline, color: Theme.of(context).colorScheme.onError),
+    ),
+    confirmDismiss: (_) async => await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Delete $label?'),
+        content: const Text('This cannot be undone.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete')),
+        ],
+      ),
+    ) ?? false,
+    onDismissed: (_) => onDelete(),
+    child: child,
+  );
+}
+
+LatLng? _locationFromGoogleMapText(String text) {
+  final decoded = Uri.decodeFull(text);
+  final coordinateMatch = RegExp(
+    r'@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)|!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)|[?&](?:q|query|ll)=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)',
+  ).firstMatch(decoded);
+  if (coordinateMatch != null) {
+    return LatLng(
+      double.parse(coordinateMatch.group(1) ?? coordinateMatch.group(3) ?? coordinateMatch.group(5)!),
+      double.parse(coordinateMatch.group(2) ?? coordinateMatch.group(4) ?? coordinateMatch.group(6)!),
+    );
+  }
+  final plusCode = RegExp(r'([23456789CFGHJMPQRVWX]{8}\+[23456789CFGHJMPQRVWX]{2,})', caseSensitive: false).firstMatch(decoded)?.group(1);
+  return plusCode == null ? null : _decodePlusCode(plusCode);
+}
+
+/// Decodes a full Open Location Code (Google Maps Plus Code) locally, without
+/// an API key. Short local codes need a locality context, which Google short
+/// links provide after redirecting to their full latitude/longitude URL.
+LatLng? _decodePlusCode(String input) {
+  const alphabet = '23456789CFGHJMPQRVWX';
+  final code = input.toUpperCase().replaceAll('+', '');
+  if (code.length < 8 ||
+      code.split('').any((char) => !alphabet.contains(char))) {
+    return null;
+  }
+  var latitude = -90.0;
+  var longitude = -180.0;
+  var latitudeResolution = 20.0;
+  var longitudeResolution = 20.0;
+  final pairLength = code.length < 10 ? code.length : 10;
+  for (var index = 0; index < pairLength; index += 2) {
+    if (index + 1 >= pairLength) return null;
+    latitude += alphabet.indexOf(code[index]) * latitudeResolution;
+    longitude += alphabet.indexOf(code[index + 1]) * longitudeResolution;
+    latitudeResolution /= 20;
+    longitudeResolution /= 20;
+  }
+  for (var index = 10; index < code.length; index++) {
+    final value = alphabet.indexOf(code[index]);
+    latitudeResolution /= 5;
+    longitudeResolution /= 4;
+    latitude += (value ~/ 4) * latitudeResolution;
+    longitude += (value % 4) * longitudeResolution;
+  }
+  return LatLng(latitude + latitudeResolution / 2, longitude + longitudeResolution / 2);
+}
