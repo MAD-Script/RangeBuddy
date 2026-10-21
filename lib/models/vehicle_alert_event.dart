@@ -17,6 +17,9 @@ enum VehicleAlertType {
 
   @HiveField(2)
   criticalBlinkingRed, // last bar blinking red — critically low
+
+  @HiveField(3)
+  batteryDrained, // bike can only crawl at approximately 5–10 km/h
 }
 
 @HiveType(typeId: 6)

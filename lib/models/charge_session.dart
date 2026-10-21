@@ -10,5 +10,7 @@ class ChargeSession extends HiveObject {
   @HiveField(3) double recoveredWh;
   @HiveField(4) int timestampMs;
   @HiveField(5) String? placeName;
-  ChargeSession({required this.profileKey, required this.chargerName, required this.hours, required this.recoveredWh, required this.timestampMs, this.placeName});
+  @HiveField(6) double? startPercent;
+  @HiveField(7) double? endPercent;
+  ChargeSession({required this.profileKey, required this.chargerName, required this.hours, required this.recoveredWh, required this.timestampMs, this.placeName, this.startPercent, this.endPercent});
 }

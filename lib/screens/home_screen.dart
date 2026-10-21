@@ -11,6 +11,7 @@ class HomeScreen extends StatefulWidget {
   final VoidCallback onStartRide;
   final bool isRideActive;
   final VoidCallback onResumeRide;
+  final VoidCallback onOpenBatteryHealth;
 
   /// Called whenever the passenger selection changes, so the caller
   /// always has the current passenger weight ready the instant
@@ -26,6 +27,7 @@ class HomeScreen extends StatefulWidget {
     required this.onPassengerWeightChanged,
     required this.isRideActive,
     required this.onResumeRide,
+    required this.onOpenBatteryHealth,
   });
 
   @override
@@ -135,25 +137,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(widget.profile.name, style: const TextStyle(fontWeight: FontWeight.w800)),
-            Text('RANGE TRACKER', style: TextStyle(fontSize: 10, letterSpacing: 1.4, color: scheme.onSurfaceVariant)),
-          ],
-        ),
-        actions: [
-          Container(
-            width: 12,
-            height: 12,
-            margin: const EdgeInsets.only(right: 22),
-            decoration: BoxDecoration(color: const Color(0xFF35A982), shape: BoxShape.circle),
-          ),
-        ],
+        title: const Text('RangeBuddy', style: TextStyle(fontWeight: FontWeight.w900)),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+          padding: const EdgeInsets.fromLTRB(20, 28, 20, 28),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -241,6 +229,7 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: 16),
               Card(
                 child: ListTile(
+                  onTap: widget.onOpenBatteryHealth,
                   leading: Icon(Icons.favorite_rounded, color: scheme.primary),
                   title: const Text('Battery health', style: TextStyle(fontWeight: FontWeight.w800)),
                   subtitle: const Text('Estimated usable battery capacity'),

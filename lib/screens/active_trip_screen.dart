@@ -78,6 +78,7 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> {
         tripId: widget.tripId,
         riderWeightKg: widget.riderWeightKg,
         passengerWeightKg: widget.passengerWeightKg,
+        isCalibrationRide: widget.isCalibrationRide,
         onSample: _onSample,
       );
       _tripStartTime = DateTime.now();
@@ -250,6 +251,19 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> {
     }
   }
 
+  Future<void> _logCalibrationEvent(
+      VehicleAlertType type, String label) async {
+    await widget.logger.logAlertEvent(type);
+    if (type == VehicleAlertType.batteryDrained) {
+      widget.engine.eRemainingWh = 0;
+      widget.onBatteryChanged?.call();
+    }
+    if (mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Logged: $label')));
+    }
+  }
+
   Future<void> _endRide() async {
     await widget.logger.stopTrip();
     if (mounted) Navigator.pop(context);
@@ -327,6 +341,7 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> {
 
     return Scaffold(
       appBar: AppBar(
+        backgroundColor: widget.isCalibrationRide ? const Color(0xFFFFC107) : null,
         title: const Text('Ride in progress', style: TextStyle(fontWeight: FontWeight.w800)),
         actions: const [
           Padding(
@@ -341,12 +356,13 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Center(
-                child: Text(
-                  'LIVE SPEED',
-                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 2.2),
+              if (widget.isCalibrationRide)
+                Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(color: const Color(0xFFFFF3CD), borderRadius: BorderRadius.circular(12)),
+                  child: const Text('CALIBRATION RIDE · Do not log charging until Battery drained is recorded.', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.w800)),
                 ),
-              ),
               Center(
                 child: SpeedGauge(
                   speedKmh: _rawSpeedKmh,
@@ -405,16 +421,6 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> {
                 clipBehavior: Clip.antiAlias,
                 child: Column(
                   children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
-                      child: Row(
-                        children: [
-                          Icon(Icons.map_outlined, size: 18, color: Theme.of(context).colorScheme.primary),
-                          const SizedBox(width: 7),
-                          const Text('ROUTE SNAPSHOT', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1.2)),
-                        ],
-                      ),
-                    ),
                     SizedBox(
                       height: 180,
                       child: TripRouteMap(
@@ -423,6 +429,10 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> {
                         tileCacheDir: widget.tileCacheDir,
                         interactive: false,
                         followCurrentPosition: true,
+                        savedPlaces: widget.chargingPlaceBox?.values
+                            .where((place) => place.profileKey == widget.profileKey)
+                            .map((place) => LatLng(place.latitude, place.longitude))
+                            .toList() ?? const [],
                       ),
                     ),
                   ],
@@ -440,7 +450,7 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> {
                           label: 'Charge Left',
                           valueLabel: '${batteryPercent.toStringAsFixed(0)}%',
                           fraction: batteryPercent / 100,
-                          color: TankColors.forPercent(batteryPercent),
+                          color: const Color(0xFF39A875),
                           icon: Icons.battery_charging_full,
                         ),
                       ),
@@ -455,7 +465,7 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> {
                           label: 'Range Left',
                           valueLabel: '${rangeKm.toStringAsFixed(0)} km',
                           fraction: maxRangeKm > 0 ? rangeKm / maxRangeKm : 0,
-                          color: TankColors.forPercent(batteryPercent),
+                          color: const Color(0xFF2196F3),
                           icon: Icons.route_outlined,
                         ),
                       ),
@@ -467,9 +477,11 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> {
                 const SizedBox(height: 18),
                 Row(
                   children: [
-                    Expanded(child: FilledButton.icon(onPressed: _promptBarDrop, icon: const Icon(Icons.flag_outlined), label: const Text('Bar Dropped'))),
-                    const SizedBox(width: 12),
-                    Expanded(child: FilledButton.tonalIcon(onPressed: _promptAlertEvent, icon: const Icon(Icons.warning_amber_outlined), label: const Text('Log Alert'))),
+                    Expanded(child: OutlinedButton.icon(onPressed: () => _logCalibrationEvent(VehicleAlertType.lowBatteryAudibleWarning, 'Audible warning'), icon: const Icon(Icons.volume_up_outlined), label: const Text('Audible warning'))),
+                    const SizedBox(width: 6),
+                    Expanded(child: OutlinedButton.icon(onPressed: () => _logCalibrationEvent(VehicleAlertType.criticalBlinkingRed, 'Critical warning'), icon: const Icon(Icons.warning_amber_rounded), label: const Text('Critical'))),
+                    const SizedBox(width: 6),
+                    Expanded(child: FilledButton.icon(onPressed: () => _logCalibrationEvent(VehicleAlertType.batteryDrained, 'Battery drained'), icon: const Icon(Icons.battery_0_bar_rounded), label: const Text('Battery drained'))),
                   ],
                 ),
                 const SizedBox(height: 12),

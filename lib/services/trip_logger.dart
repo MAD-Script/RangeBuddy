@@ -157,6 +157,7 @@ class TripLogger {
     double passengerWeightKg = 0,
     ChargeStateType startChargeType = ChargeStateType.unknown,
     int? startBarLevel,
+    bool isCalibrationRide = false,
     TripSampleCallback? onSample,
   }) async {
     if (isLogging) {
@@ -174,6 +175,7 @@ class TripLogger {
         passengerWeightKg: passengerWeightKg,
         startChargeType: startChargeType,
         startBarLevel: startBarLevel,
+        isCalibrationRide: isCalibrationRide,
       ),
     );
 

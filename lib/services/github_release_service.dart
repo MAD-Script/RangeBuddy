@@ -8,6 +8,10 @@ import 'package:path_provider/path_provider.dart';
 /// Read-only GitHub Release checker. Configure the public repository at build
 /// time, e.g. --dart-define=RANGEBUDDY_GITHUB_REPOSITORY=owner/RangeBuddy.
 class GitHubReleaseService {
+  static const installedVersion = String.fromEnvironment(
+    'RANGEBUDDY_APP_VERSION',
+    defaultValue: '0.1.2',
+  );
   static const repository = String.fromEnvironment(
     'RANGEBUDDY_GITHUB_REPOSITORY',
     defaultValue: 'MAD-Script/RangeBuddy',
@@ -98,4 +102,16 @@ class GitHubRelease {
     required this.apkUrl,
     required this.checksumUrl,
   });
+
+  bool get isNewerThanInstalled => _compareVersions(version, GitHubReleaseService.installedVersion) > 0;
+}
+
+int _compareVersions(String left, String right) {
+  final a = left.split('.').map((part) => int.tryParse(part) ?? 0).toList();
+  final b = right.split('.').map((part) => int.tryParse(part) ?? 0).toList();
+  for (var i = 0; i < 3; i++) {
+    final difference = (i < a.length ? a[i] : 0) - (i < b.length ? b[i] : 0);
+    if (difference != 0) return difference;
+  }
+  return 0;
 }

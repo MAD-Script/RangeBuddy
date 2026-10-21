@@ -10,6 +10,7 @@ import '../services/catalog_service.dart';
 import '../services/calibration_export_service.dart';
 import '../models/battery_state.dart';
 import '../models/charge_session.dart';
+import 'battery_health_screen.dart';
 
 class VehicleSetupScreen extends StatefulWidget {
   final VehicleProfile profile;
@@ -164,11 +165,19 @@ class _VehicleSetupScreenState extends State<VehicleSetupScreen> {
       final release = await GitHubReleaseService().latestRelease();
       if (!mounted) return;
       if (release == null) return;
+      if (!release.isNewerThanInstalled) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('RangeBuddy is already up to date.')));
+        return;
+      }
       await showDialog<void>(
         context: context,
         builder: (context) => AlertDialog(
           title: Text('RangeBuddy ${release.version}'),
-          content: SingleChildScrollView(child: Text(release.notes)),
+          content: SizedBox(width: double.maxFinite, child: SingleChildScrollView(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(release.notes),
+            const SizedBox(height: 16),
+            TextButton.icon(onPressed: () => Clipboard.setData(ClipboardData(text: release.pageUrl)), icon: const Icon(Icons.link), label: const Text('Copy GitHub release link')),
+          ]))),
           actions: [
             TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
             if (release.apkUrl != null)
@@ -242,6 +251,13 @@ class _VehicleSetupScreenState extends State<VehicleSetupScreen> {
             ),
           ),
           const SizedBox(height: 20),
+          Text('BATTERY', style: TextStyle(fontSize: 11, letterSpacing: 1.5, fontWeight: FontWeight.w800, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+          const SizedBox(height: 8),
+          Card(child: ListTile(
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => BatteryHealthScreen(profile: widget.profile, profileKey: widget.profileKey, batteryStates: widget.batteryStateBox, sessions: widget.chargeSessionBox))),
+            leading: const Icon(Icons.favorite_rounded), title: const Text('Battery health', style: TextStyle(fontWeight: FontWeight.w800)), subtitle: const Text('Capacity estimate, wear and calibration guidance'), trailing: const Icon(Icons.chevron_right_rounded),
+          )),
+          const SizedBox(height: 20),
           Text('CALIBRATION', style: TextStyle(fontSize: 11, letterSpacing: 1.5, fontWeight: FontWeight.w800, color: Theme.of(context).colorScheme.onSurfaceVariant)),
           const SizedBox(height: 8),
           Card(child: Column(children: [
@@ -252,8 +268,29 @@ class _VehicleSetupScreenState extends State<VehicleSetupScreen> {
               subtitle: const Text('Resets the virtual battery to 100% for this bike — the main way to correct drift.'),
             ),
             const Divider(height: 1),
+            SwitchListTile(
+              value: widget.appSettingsBox.get('calibration_mode_${widget.profileKey}') == 'true',
+              onChanged: (enabled) async {
+                if (!enabled) {
+                  final confirm = await showDialog<bool>(context: context, builder: (context) => AlertDialog(title: const Text('Turn off calibration mode?'), content: const Text('An incomplete calibration will not improve battery health. You can enable it again later.'), actions: [TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Keep on')), FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Turn off'))]));
+                  if (confirm != true) return;
+                }
+                await widget.appSettingsBox.put('calibration_mode_${widget.profileKey}', enabled.toString());
+                if (mounted) setState(() {});
+              },
+              title: const Text('Calibration mode', style: TextStyle(fontWeight: FontWeight.w800)),
+              subtitle: const Text('Make Start Ride begin a guided calibration ride.'),
+            ),
+            const Divider(height: 1),
             ListTile(
-              onTap: widget.onStartCalibration,
+              onTap: () async {
+                final proceed = await showDialog<bool>(context: context, builder: (context) => AlertDialog(
+                  title: const Text('Before calibration'),
+                  content: const Text('Confirm a full charge first. You may ride with passengers. Do not log any charge during calibration. End only after Battery drained, when the bike is crawling at roughly 5–10 km/h.'),
+                  actions: [TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')), FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Start'))],
+                ));
+                if (proceed == true) widget.onStartCalibration();
+              },
               leading: const Icon(Icons.rule_rounded),
               title: const Text('Start calibration ride', style: TextStyle(fontWeight: FontWeight.w800)),
               subtitle: const Text('A ride flagged for extra calibration prompts, to sharpen prediction accuracy.'),

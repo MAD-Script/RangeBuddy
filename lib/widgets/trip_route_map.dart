@@ -27,6 +27,7 @@ class TripRouteMap extends StatefulWidget {
   /// panning would fight with it), so this is meant for the locked,
   /// non-interactive active-trip case.
   final bool followCurrentPosition;
+  final List<LatLng> savedPlaces;
 
   const TripRouteMap({
     super.key,
@@ -36,6 +37,7 @@ class TripRouteMap extends StatefulWidget {
     this.height = 220,
     this.interactive = true,
     this.followCurrentPosition = false,
+    this.savedPlaces = const [],
   });
 
   @override
@@ -123,6 +125,12 @@ class _TripRouteMapState extends State<TripRouteMap> {
                   Marker(
                     point: widget.routePoints.last,
                     child: const Icon(Icons.flag, size: 16),
+                  ),
+                for (final place in widget.savedPlaces)
+                  Marker(
+                    point: place,
+                    child: const Icon(Icons.location_on_rounded,
+                        size: 28, color: Color(0xFF35A982)),
                   ),
               ],
             ),

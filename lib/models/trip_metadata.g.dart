@@ -27,13 +27,14 @@ class TripMetadataAdapter extends TypeAdapter<TripMetadata> {
       endChargeType: fields[7] as ChargeStateType,
       endBarLevel: fields[8] as int?,
       notes: fields[9] as String,
+      isCalibrationRide: fields[10] as bool? ?? false,
     );
   }
 
   @override
   void write(BinaryWriter writer, TripMetadata obj) {
     writer
-      ..writeByte(10)
+      ..writeByte(11)
       ..writeByte(0)
       ..write(obj.tripId)
       ..writeByte(1)
@@ -53,7 +54,9 @@ class TripMetadataAdapter extends TypeAdapter<TripMetadata> {
       ..writeByte(8)
       ..write(obj.endBarLevel)
       ..writeByte(9)
-      ..write(obj.notes);
+      ..write(obj.notes)
+      ..writeByte(10)
+      ..write(obj.isCalibrationRide);
   }
 
   @override

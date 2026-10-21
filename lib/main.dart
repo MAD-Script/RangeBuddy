@@ -17,6 +17,7 @@ import 'models/charging_place.dart';
 import 'services/range_engine.dart';
 import 'services/trip_logger.dart';
 import 'services/trip_foreground_task.dart';
+import 'services/github_release_service.dart';
 import 'theme/app_theme.dart';
 import 'screens/home_screen.dart';
 import 'screens/active_trip_screen.dart';
@@ -146,7 +147,34 @@ class _RootShellState extends State<RootShell> {
   void initState() {
     super.initState();
     _loadSelectedProfile();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkUpdateOnOpen());
   }
+
+  Future<void> _checkUpdateOnOpen() async {
+    final today = DateTime.now();
+    final key = 'update_prompt_${today.year}${today.month}${today.day}';
+    if (appSettingsBox.get(key) == 'seen') return;
+    try {
+      final release = await GitHubReleaseService().latestRelease();
+      if (!mounted || release == null || !release.isNewerThanInstalled) return;
+      await appSettingsBox.put(key, 'seen');
+      await _showReleaseNotes(release);
+    } catch (_) {
+      // Update checks must never block an offline-first ride tracker.
+    }
+  }
+
+  Future<void> _showReleaseNotes(GitHubRelease release) => showDialog<void>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Text('New update available · v${release.version}'),
+      content: SizedBox(width: double.maxFinite, child: SingleChildScrollView(child: SelectableText(release.notes))),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Later')),
+        if (release.apkUrl != null) FilledButton(onPressed: () async { Navigator.pop(context); await AndroidUpdateInstaller().downloadAndInstall(release); }, child: const Text('Update now')),
+      ],
+    ),
+  );
 
   void _loadSelectedProfile([String? requestedKey]) {
     final selectedKey = requestedKey ??
@@ -179,11 +207,45 @@ class _RootShellState extends State<RootShell> {
     );
   }
 
+  Future<void> _recordFullCharge() async {
+    final startPercent = _engine.batteryPercent();
+    final beforeWh = _engine.eRemainingWh;
+    _engine.resetToFull();
+    final recoveredWh = _engine.eRemainingWh - beforeWh;
+    await chargeSessionBox.add(ChargeSession(
+      profileKey: _profileKey,
+      chargerName: 'Full charge',
+      hours: 7.5,
+      recoveredWh: recoveredWh,
+      timestampMs: DateTime.now().millisecondsSinceEpoch,
+      startPercent: startPercent,
+      endPercent: 100,
+    ));
+    _persistBattery(fullCharge: true);
+    if (mounted) setState(() {});
+  }
+
   void _switchProfile(String key) {
     setState(() => _loadSelectedProfile(key));
   }
 
   Future<void> _startRide({bool calibration = false}) async {
+    final calibrationMode = calibration ||
+        appSettingsBox.get('calibration_mode_${_profileKey}') == 'true';
+    if (calibrationMode && !calibration && mounted) {
+      final proceed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Start calibration ride?'),
+          content: const Text('Start only from a confirmed full charge. Do not log a charge during this ride. End calibration with Battery drained when the bike is crawling at about 5–10 km/h.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Start calibration')),
+          ],
+        ),
+      );
+      if (proceed != true) return;
+    }
     final tripId = DateTime.now().millisecondsSinceEpoch.toString();
     final totalMassKg = _profile.vehicleWeightKg +
         _profile.defaultRiderWeightKg +
@@ -193,7 +255,7 @@ class _RootShellState extends State<RootShell> {
       riderWeightKg: _profile.defaultRiderWeightKg,
       passengerWeightKg: _selectedPassengerWeightKg,
       totalMassKg: totalMassKg,
-      isCalibrationRide: calibration,
+      isCalibrationRide: calibrationMode,
     );
     await _openActiveTripScreen();
   }
@@ -243,6 +305,7 @@ class _RootShellState extends State<RootShell> {
         onPassengerWeightChanged: (kg) => _selectedPassengerWeightKg = kg,
         isRideActive: _activeRide != null,
         onResumeRide: _openActiveTripScreen,
+        onOpenBatteryHealth: () => setState(() => _tabIndex = 3),
       ),
       TripHistoryScreen(
         metadataBox: metadataBox,
@@ -260,6 +323,8 @@ class _RootShellState extends State<RootShell> {
         sessionBox: chargeSessionBox,
         placeBox: chargingPlaceBox,
         onBatteryChanged: _persistBattery,
+        onFullCharge: _recordFullCharge,
+        isCalibrationActive: _activeRide?.isCalibrationRide == true && _logger.isLogging,
         tileCacheDir: tileCacheDir,
       ),
       VehicleSetupScreen(
@@ -272,11 +337,7 @@ class _RootShellState extends State<RootShell> {
         batteryStateBox: batteryStateBox,
         chargeSessionBox: chargeSessionBox,
         onStartCalibration: () => _startRide(calibration: true),
-        onConfirmFullCharge: () {
-          _engine.resetToFull();
-          _persistBattery(fullCharge: true);
-          setState(() {});
-        },
+        onConfirmFullCharge: () { _recordFullCharge(); },
         tileCacheDir: tileCacheDir,
       ),
     ];

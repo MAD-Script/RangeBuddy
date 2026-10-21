@@ -23,13 +23,15 @@ class ChargeSessionAdapter extends TypeAdapter<ChargeSession> {
       recoveredWh: fields[3] as double,
       timestampMs: fields[4] as int,
       placeName: fields[5] as String?,
+      startPercent: fields[6] as double?,
+      endPercent: fields[7] as double?,
     );
   }
 
   @override
   void write(BinaryWriter writer, ChargeSession obj) {
     writer
-      ..writeByte(6)
+      ..writeByte(8)
       ..writeByte(0)
       ..write(obj.profileKey)
       ..writeByte(1)
@@ -41,7 +43,11 @@ class ChargeSessionAdapter extends TypeAdapter<ChargeSession> {
       ..writeByte(4)
       ..write(obj.timestampMs)
       ..writeByte(5)
-      ..write(obj.placeName);
+      ..write(obj.placeName)
+      ..writeByte(6)
+      ..write(obj.startPercent)
+      ..writeByte(7)
+      ..write(obj.endPercent);
   }
 
   @override

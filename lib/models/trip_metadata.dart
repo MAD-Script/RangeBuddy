@@ -48,6 +48,9 @@ class TripMetadata extends HiveObject {
   @HiveField(9)
   String notes; // e.g. "AC blasting", "carried groceries", "heavy rain"
 
+  @HiveField(10)
+  bool isCalibrationRide;
+
   TripMetadata({
     required this.tripId,
     required this.startTimestampMs,
@@ -59,5 +62,6 @@ class TripMetadata extends HiveObject {
     this.endChargeType = ChargeStateType.unknown,
     this.endBarLevel,
     this.notes = '',
+    this.isCalibrationRide = false,
   });
 }

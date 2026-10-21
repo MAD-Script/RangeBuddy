@@ -59,6 +59,8 @@ class VehicleAlertTypeAdapter extends TypeAdapter<VehicleAlertType> {
         return VehicleAlertType.refuelIndicatorOn;
       case 2:
         return VehicleAlertType.criticalBlinkingRed;
+      case 3:
+        return VehicleAlertType.batteryDrained;
       default:
         return VehicleAlertType.lowBatteryAudibleWarning;
     }
@@ -75,6 +77,9 @@ class VehicleAlertTypeAdapter extends TypeAdapter<VehicleAlertType> {
         break;
       case VehicleAlertType.criticalBlinkingRed:
         writer.writeByte(2);
+        break;
+      case VehicleAlertType.batteryDrained:
+        writer.writeByte(3);
         break;
     }
   }

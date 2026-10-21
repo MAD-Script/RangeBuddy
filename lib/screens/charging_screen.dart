@@ -18,9 +18,15 @@ class ChargingScreen extends StatelessWidget {
   final Box<ChargeSession> sessionBox;
   final Box<ChargingPlace> placeBox;
   final VoidCallback onBatteryChanged;
+  final Future<void> Function() onFullCharge;
+  final bool isCalibrationActive;
   final Directory tileCacheDir;
+  final ValueNotifier<_SessionFilter> _filter =
+      ValueNotifier(_SessionFilter.month);
+  final ValueNotifier<bool> _showAllChargers = ValueNotifier(false);
+  final ValueNotifier<bool> _showAllPlaces = ValueNotifier(false);
 
-  const ChargingScreen({
+  ChargingScreen({
     super.key,
     required this.profile,
     required this.profileKey,
@@ -29,10 +35,16 @@ class ChargingScreen extends StatelessWidget {
     required this.sessionBox,
     required this.placeBox,
     required this.onBatteryChanged,
+    required this.onFullCharge,
+    this.isCalibrationActive = false,
     required this.tileCacheDir,
   });
 
   Future<void> _addCharge(BuildContext context) async {
+    if (isCalibrationActive) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Charging is disabled until this calibration ride ends with Battery drained.')));
+      return;
+    }
     final chargers = chargerBox.values
         .where((charger) => charger.profileKey == profileKey)
         .toList();
@@ -88,6 +100,7 @@ class ChargingScreen extends StatelessWidget {
     );
     if (result == null) return;
     final chargeBefore = engine.eRemainingWh;
+    final startPercent = engine.batteryPercent();
     engine.addChargedEnergy(
       chargerWattage: result.charger.wattage,
       hoursCharged: result.hours,
@@ -100,6 +113,8 @@ class ChargingScreen extends StatelessWidget {
       hours: result.hours,
       recoveredWh: recoveredWh,
       timestampMs: DateTime.now().millisecondsSinceEpoch,
+      startPercent: startPercent,
+      endPercent: engine.batteryPercent(),
     ));
     onBatteryChanged();
   }
@@ -244,9 +259,17 @@ class ChargingScreen extends StatelessWidget {
           chargerBox.listenable(),
           sessionBox.listenable(),
           placeBox.listenable(),
+          _filter,
+          _showAllChargers,
+          _showAllPlaces,
         ]),
         builder: (context, _) {
-          final sessions = sessionBox.values.where((s) => s.profileKey == profileKey).toList().reversed.toList();
+          final sessions = sessionBox.values
+              .where((s) => s.profileKey == profileKey)
+              .where((s) => _inFilter(s, _filter.value))
+              .toList()
+              .reversed
+              .toList();
           final places = placeBox.values.where((p) => p.profileKey == profileKey).toList();
           final chargers = chargerBox.values.where((c) => c.profileKey == profileKey).toList();
           return ListView(padding: const EdgeInsets.fromLTRB(20, 8, 20, 96), children: [
@@ -258,43 +281,75 @@ class ChargingScreen extends StatelessWidget {
             Text('${engine.estimatedRangeKmBaseline().toStringAsFixed(0)} km estimated range · ${profile.name}', style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
           ])),
         ]))),
+        const SizedBox(height: 10),
+        FilledButton.icon(
+          onPressed: isCalibrationActive ? null : () async {
+            final confirm = await showDialog<bool>(
+              context: context,
+              builder: (context) => AlertDialog(
+                title: const Text('Log full charge?'),
+                content: const Text('This records a 7 h 30 min full charge and only restores the amount currently missing.'),
+                actions: [
+                  TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+                  FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Confirm full charge')),
+                ],
+              ),
+            );
+            if (confirm == true) await onFullCharge();
+          },
+          icon: const Icon(Icons.battery_charging_full_rounded),
+          label: const Text('CONFIRM FULL CHARGE · 7h 30m'),
+        ),
         const SizedBox(height: 20),
         Row(children: [
+          IconButton(icon: Icon(_showAllChargers.value ? Icons.expand_less : Icons.expand_more), onPressed: () => _showAllChargers.value = !_showAllChargers.value),
           Expanded(child: _Heading(label: 'SAVED CHARGERS', action: '${chargers.length} saved')),
           TextButton.icon(onPressed: () => _configureCharger(context), icon: const Icon(Icons.tune, size: 17), label: const Text('Set up')),
         ]),
         if (chargers.isEmpty)
           const _EmptyCard(icon: Icons.power_outlined, text: 'Set up your charger once so each charge log only needs its duration.'),
-        for (final charger in chargers)
-          _DeleteOnSwipe(
-            dismissKey: ValueKey('charger-${charger.key}'),
-            label: charger.name,
-            onDelete: () => charger.delete(),
-            child: Card(child: ListTile(
-              leading: const Icon(Icons.power_outlined),
-              title: Text(charger.name),
-              subtitle: Text('${charger.wattage.toStringAsFixed(0)} W · ${(charger.efficiency * 100).toStringAsFixed(0)}% efficient'),
-              trailing: charger.isDefault ? const Text('DEFAULT') : null,
-            )),
-          ),
-        const SizedBox(height: 16),
-        Row(children: [Expanded(child: _Heading(label: 'SAVED CHARGING PLACES', action: '${places.length} saved')), TextButton.icon(onPressed: () => _addPlace(context), icon: const Icon(Icons.add, size: 17), label: const Text('Add'))]),
-        if (places.isEmpty) _EmptyCard(icon: Icons.location_on_outlined, text: 'Save Home, free, or paid charging places to plan your range.'),
-        for (final place in places) _DeleteOnSwipe(
-          dismissKey: ValueKey('place-${place.key}'),
-          label: place.name,
-          onDelete: () => place.delete(),
-          child: Card(child: ListTile(leading: Icon(place.isFree ? Icons.home_rounded : Icons.payments_outlined), title: Text(place.name), subtitle: Text(place.isFree ? 'Free charging' : 'Paid charging'))),
+        if (chargers.isNotEmpty) Wrap(
+          spacing: 8, runSpacing: 6,
+          children: [for (final charger in (_showAllChargers.value ? chargers : chargers.take(3)))
+            InputChip(
+              avatar: const Icon(Icons.power_outlined, size: 17),
+              label: Text('${charger.name} · ${charger.wattage.toStringAsFixed(0)}W'),
+              onDeleted: () => charger.delete(),
+            ),
+          ],
         ),
         const SizedBox(height: 16),
-        _Heading(label: 'CHARGING HISTORY', action: '${sessions.length} sessions'),
+        Row(children: [
+          IconButton(icon: Icon(_showAllPlaces.value ? Icons.expand_less : Icons.expand_more), onPressed: () => _showAllPlaces.value = !_showAllPlaces.value),
+          Expanded(child: _Heading(label: 'SAVED PLACES', action: '${places.length} saved')),
+          TextButton.icon(onPressed: () => _addPlace(context), icon: const Icon(Icons.add, size: 17), label: const Text('Add')),
+        ]),
+        if (places.isEmpty) _EmptyCard(icon: Icons.location_on_outlined, text: 'Save Home, free, or paid charging places to plan your range.'),
+        if (places.isNotEmpty) Wrap(
+          spacing: 8, runSpacing: 6,
+          children: [for (final place in (_showAllPlaces.value ? places : places.take(6)))
+            InputChip(
+              avatar: Icon(place.isFree ? Icons.home_rounded : Icons.payments_outlined, size: 17),
+              label: Text(place.name), onDeleted: () => place.delete(),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Row(children: [
+          const Expanded(child: _Heading(label: 'CHARGING HISTORY', action: '')),
+          DropdownButton<_SessionFilter>(
+            value: _filter.value,
+            underline: const SizedBox(),
+            onChanged: (value) { if (value != null) _filter.value = value; },
+            items: const [
+              DropdownMenuItem(value: _SessionFilter.month, child: Text('This month')),
+              DropdownMenuItem(value: _SessionFilter.year, child: Text('This year')),
+              DropdownMenuItem(value: _SessionFilter.all, child: Text('All time')),
+            ],
+          ),
+        ]),
         if (sessions.isEmpty) const _EmptyCard(icon: Icons.history_rounded, text: 'Log a charge to update your virtual battery.'),
-        for (final session in sessions) Card(child: ListTile(
-          leading: const Icon(Icons.bolt_rounded),
-          title: Text(session.chargerName),
-          subtitle: Text('${session.hours.toStringAsFixed(1)} h · ${session.recoveredWh.toStringAsFixed(0)} Wh recovered'),
-          trailing: Text('+${(session.recoveredWh / profile.baseWhPerKm).toStringAsFixed(0)} km', style: const TextStyle(fontWeight: FontWeight.w900)),
-        )),
+        for (final session in sessions) _ChargeSessionCard(session: session, profile: profile),
           ]);
         },
       ),
@@ -305,8 +360,61 @@ class ChargingScreen extends StatelessWidget {
 class _ChargeInput { final ChargerProfile charger; final double hours; const _ChargeInput(this.charger, this.hours); }
 class _PlaceInput { final String name; final double latitude; final double longitude; final bool isFree; const _PlaceInput(this.name, this.latitude, this.longitude, this.isFree); }
 enum _PlaceMethod { map, googleLink }
+enum _SessionFilter { month, year, all }
+
+bool _inFilter(ChargeSession session, _SessionFilter filter) {
+  final when = DateTime.fromMillisecondsSinceEpoch(session.timestampMs);
+  final now = DateTime.now();
+  return switch (filter) {
+    _SessionFilter.all => true,
+    _SessionFilter.year => when.year == now.year,
+    _SessionFilter.month => when.year == now.year && when.month == now.month,
+  };
+}
 class _Heading extends StatelessWidget { final String label; final String action; const _Heading({required this.label, required this.action}); @override Widget build(BuildContext context) => Row(children: [Text(label, style: TextStyle(fontSize: 11, letterSpacing: 1.4, fontWeight: FontWeight.w800, color: Theme.of(context).colorScheme.onSurfaceVariant)), const Spacer(), Text(action, style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant))]); }
 class _EmptyCard extends StatelessWidget { final IconData icon; final String text; const _EmptyCard({required this.icon, required this.text}); @override Widget build(BuildContext context) => Card(child: Padding(padding: const EdgeInsets.all(18), child: Row(children: [Icon(icon), const SizedBox(width: 12), Expanded(child: Text(text, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)))]))); }
+
+class _ChargeSessionCard extends StatelessWidget {
+  final ChargeSession session;
+  final VehicleProfile profile;
+  const _ChargeSessionCard({required this.session, required this.profile});
+
+  @override
+  Widget build(BuildContext context) {
+    final start = session.startPercent ??
+        ((session.endPercent ?? 100) -
+                session.recoveredWh / profile.totalEnergyWh() * 100)
+            .clamp(0, 100);
+    final end = session.endPercent ??
+        (start + session.recoveredWh / profile.totalEnergyWh() * 100)
+            .clamp(0, 100);
+    final delta = end - start;
+    final scheme = Theme.of(context).colorScheme;
+    final date = DateTime.fromMillisecondsSinceEpoch(session.timestampMs);
+    final duration = Duration(minutes: (session.hours * 60).round());
+    final label = '${duration.inHours}h ${duration.inMinutes.remainder(60).toString().padLeft(2, '0')}m';
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Expanded(child: Text('Charged for $label', style: const TextStyle(fontWeight: FontWeight.w700))),
+            Text('${date.day}/${date.month}/${date.year}', style: TextStyle(color: scheme.onSurfaceVariant)),
+          ]),
+          const SizedBox(height: 10),
+          Row(children: [
+            Expanded(child: Text('${start.toStringAsFixed(0)}% to ${end.toStringAsFixed(0)}%', style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w800))),
+            Text('+${delta.toStringAsFixed(0)}%', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: scheme.primary)),
+          ]),
+          const SizedBox(height: 6),
+          Text('${session.chargerName} · ${session.recoveredWh.toStringAsFixed(0)} Wh recovered'),
+          const SizedBox(height: 10),
+          ClipRRect(borderRadius: BorderRadius.circular(5), child: LinearProgressIndicator(value: end / 100, minHeight: 9)),
+        ]),
+      ),
+    );
+  }
+}
 
 class _DeleteOnSwipe extends StatelessWidget {
   final Key dismissKey;
