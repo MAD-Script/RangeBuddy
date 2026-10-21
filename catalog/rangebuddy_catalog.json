@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "bikes": [
     {
       "id": "tailg-f52-red-rabbit",
@@ -9,7 +9,69 @@
       "battery_ah": 23,
       "motor_watt_peak": 1200,
       "vehicle_weight_kg": 104,
-      "top_speed_kmh": 55
+      "top_speed_kmh": 55,
+      "rated_range_km": 90,
+      "source": "TailG Bangladesh"
+    },
+    {
+      "id": "tailg-jaguar-t72l",
+      "brand": "TailG",
+      "model": "Jaguar T72L",
+      "system_voltage": 76,
+      "battery_ah": 32,
+      "motor_watt_peak": 2000,
+      "vehicle_weight_kg": 110,
+      "top_speed_kmh": 70,
+      "rated_range_km": 110,
+      "source": "https://edison-tailg.com/product/jaguar-t72l/"
+    },
+    {
+      "id": "tailg-leopard-f72",
+      "brand": "TailG",
+      "model": "Leopard F72",
+      "system_voltage": 96,
+      "battery_ah": 52,
+      "motor_watt_peak": 3000,
+      "vehicle_weight_kg": 180,
+      "top_speed_kmh": 70,
+      "rated_range_km": 180,
+      "source": "https://edison-tailg.com/product/leopard-f72/"
+    },
+    {
+      "id": "tailg-rhino-t53",
+      "brand": "TailG",
+      "model": "Rhino T53",
+      "system_voltage": 72,
+      "battery_ah": 35,
+      "motor_watt_peak": 1500,
+      "vehicle_weight_kg": 108,
+      "top_speed_kmh": 60,
+      "rated_range_km": 120,
+      "source": "https://edison-tailg.com/shop/"
+    },
+    {
+      "id": "tailg-saibei-f71",
+      "brand": "TailG",
+      "model": "Saibei F71",
+      "system_voltage": 72,
+      "battery_ah": 35,
+      "motor_watt_peak": 1500,
+      "vehicle_weight_kg": 105,
+      "top_speed_kmh": 55,
+      "rated_range_km": 120,
+      "source": "https://edison-tailg.com/product/saibei-f71/"
+    },
+    {
+      "id": "tailg-orca-f50",
+      "brand": "TailG",
+      "model": "Orca F50",
+      "system_voltage": 60,
+      "battery_ah": 26,
+      "motor_watt_peak": 1000,
+      "vehicle_weight_kg": 95,
+      "top_speed_kmh": 50,
+      "rated_range_km": 85,
+      "source": "https://edison-tailg.com/product/orca-f50/"
     }
   ]
 }

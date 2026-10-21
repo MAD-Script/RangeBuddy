@@ -10,7 +10,8 @@
     <application
         android:label="RangeBuddy"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@drawable/dash_launcher"
+        android:roundIcon="@drawable/dash_launcher">
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

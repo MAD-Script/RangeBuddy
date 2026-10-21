@@ -92,8 +92,23 @@ Future<void> main() async {
   runApp(const RangeBuddyApp());
 }
 
-class RangeBuddyApp extends StatelessWidget {
+class RangeBuddyApp extends StatefulWidget {
   const RangeBuddyApp({super.key});
+
+  @override
+  State<RangeBuddyApp> createState() => _RangeBuddyAppState();
+}
+
+class _RangeBuddyAppState extends State<RangeBuddyApp> {
+  var _showBrandSplash = true;
+
+  @override
+  void initState() {
+    super.initState();
+    Future<void>.delayed(const Duration(milliseconds: 1500), () {
+      if (mounted) setState(() => _showBrandSplash = false);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -101,7 +116,54 @@ class RangeBuddyApp extends StatelessWidget {
       title: 'RangeBuddy',
       theme: buildAppTheme(null, Brightness.light),
       darkTheme: buildAppTheme(null, Brightness.dark),
-      home: const RootShell(),
+      home: _showBrandSplash ? const _BrandSplash() : const RootShell(),
+    );
+  }
+}
+
+/// A lightweight first-frame brand introduction. The native Android launch
+/// theme remains intentionally plain so Flutter can take over immediately.
+class _BrandSplash extends StatelessWidget {
+  const _BrandSplash();
+
+  @override
+  Widget build(BuildContext context) {
+    const cream = Color(0xFFFFF5DF);
+    const ink = Color(0xFF3D2A22);
+    return Scaffold(
+      backgroundColor: cream,
+      body: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Image.asset('assets/branding/dash.png', width: 224),
+                const SizedBox(height: 22),
+                Image.asset(
+                  'assets/branding/rangebuddy_wordmark.png',
+                  width: 280,
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Meet Dash, your range co-pilot',
+                  style: TextStyle(color: ink, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 44),
+                const SizedBox(
+                  width: 124,
+                  child: LinearProgressIndicator(
+                    minHeight: 4,
+                    color: Color(0xFF4A9CB5),
+                    backgroundColor: Color(0x33E7A43A),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

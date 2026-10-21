@@ -34,3 +34,5 @@ flutter:
   uses-material-design: true
   assets:
     - catalog/rangebuddy_catalog.json
+    - assets/branding/dash.png
+    - assets/branding/rangebuddy_wordmark.png

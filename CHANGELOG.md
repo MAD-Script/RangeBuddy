@@ -2,6 +2,9 @@
 
 ## 0.1.2 — Charging, calibration and ride context
 
+- Added Dash, RangeBuddy's battery-bot mascot, for the launcher and app splash screen.
+- Added the RangeBuddy hand-lettered wordmark to the branded launch experience.
+- Added Jaguar T72L, Leopard F72, Rhino T53, Saibei F71 and Orca F50 baseline profiles to the verified TailG catalog.
 - Full charges now record a 7 h 30 min charging session and recover only the missing battery capacity.
 - Charge history shows start/end percentage, duration and recovered energy, with month/year/all-time filters.
 - Saved chargers and charging places use compact expandable chips.

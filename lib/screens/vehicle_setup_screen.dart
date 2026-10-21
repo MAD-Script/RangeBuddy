@@ -91,6 +91,7 @@ class _VehicleSetupScreenState extends State<VehicleSetupScreen> {
       ..motorWattPeak = entry.motorWattPeak
       ..vehicleWeightKg = entry.vehicleWeightKg
       ..topSpeedKmh = entry.topSpeedKmh
+      ..baseWhPerKm = entry.nominalWhPerKm
       ..isVerified = true
       ..catalogId = entry.id;
     await widget.profile.save();
