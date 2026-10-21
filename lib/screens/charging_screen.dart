@@ -314,7 +314,11 @@ class ChargingScreen extends StatelessWidget {
             InputChip(
               avatar: const Icon(Icons.power_outlined, size: 17),
               label: Text('${charger.name} · ${charger.wattage.toStringAsFixed(0)}W'),
-              onDeleted: () => charger.delete(),
+              onDeleted: () async {
+                if (await _confirmDeletion(context, 'charger', charger.name)) {
+                  await charger.delete();
+                }
+              },
             ),
           ],
         ),
@@ -330,7 +334,12 @@ class ChargingScreen extends StatelessWidget {
           children: [for (final place in (_showAllPlaces.value ? places : places.take(6)))
             InputChip(
               avatar: Icon(place.isFree ? Icons.home_rounded : Icons.payments_outlined, size: 17),
-              label: Text(place.name), onDeleted: () => place.delete(),
+              label: Text(place.name),
+              onDeleted: () async {
+                if (await _confirmDeletion(context, 'saved place', place.name)) {
+                  await place.delete();
+                }
+              },
             ),
           ],
         ),
@@ -349,7 +358,13 @@ class ChargingScreen extends StatelessWidget {
           ),
         ]),
         if (sessions.isEmpty) const _EmptyCard(icon: Icons.history_rounded, text: 'Log a charge to update your virtual battery.'),
-        for (final session in sessions) _ChargeSessionCard(session: session, profile: profile),
+        for (final session in sessions)
+          _DeleteOnSwipe(
+            dismissKey: ValueKey('charge-${session.key}'),
+            label: 'charge session',
+            onDelete: session.delete,
+            child: _ChargeSessionCard(session: session, profile: profile),
+          ),
           ]);
         },
       ),
@@ -361,6 +376,31 @@ class _ChargeInput { final ChargerProfile charger; final double hours; const _Ch
 class _PlaceInput { final String name; final double latitude; final double longitude; final bool isFree; const _PlaceInput(this.name, this.latitude, this.longitude, this.isFree); }
 enum _PlaceMethod { map, googleLink }
 enum _SessionFilter { month, year, all }
+
+Future<bool> _confirmDeletion(
+  BuildContext context,
+  String kind,
+  String name,
+) async {
+  return await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('Delete $kind?'),
+          content: Text('Remove “$name”? This cannot be undone.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Delete'),
+            ),
+          ],
+        ),
+      ) ??
+      false;
+}
 
 bool _inFilter(ChargeSession session, _SessionFilter filter) {
   final when = DateTime.fromMillisecondsSinceEpoch(session.timestampMs);

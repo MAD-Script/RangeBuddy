@@ -1,7 +1,7 @@
 name: ev_range_tracker
 description: RangeBuddy is an offline virtual-battery and range companion for EV bikes.
 publish_to: "none"
-version: 0.1.2
+version: 0.1.21
 
 environment:
   sdk: ^3.6.0
@@ -34,5 +34,3 @@ flutter:
   uses-material-design: true
   assets:
     - catalog/rangebuddy_catalog.json
-    - assets/branding/dash.png
-    - assets/branding/rangebuddy_wordmark.png

@@ -6,10 +6,13 @@ import '../models/trip_metadata.dart';
 import '../models/trip_sample.dart';
 import '../models/bar_drop_event.dart';
 import '../models/vehicle_alert_event.dart';
+import '../models/vehicle_profile.dart';
 import '../services/trip_logger.dart';
 import 'trip_detail_screen.dart';
 
 class TripHistoryScreen extends StatelessWidget {
+  final VehicleProfile profile;
+  final String profileKey;
   final Box<TripMetadata> metadataBox;
   final Box<TripSample> sampleBox;
   final Box<BarDropEvent> barDropBox;
@@ -20,6 +23,8 @@ class TripHistoryScreen extends StatelessWidget {
 
   TripHistoryScreen({
     super.key,
+    required this.profile,
+    required this.profileKey,
     required this.metadataBox,
     required this.sampleBox,
     required this.barDropBox,
@@ -50,7 +55,9 @@ class TripHistoryScreen extends StatelessWidget {
       body: ValueListenableBuilder(
         valueListenable: metadataBox.listenable(),
         builder: (context, Box<TripMetadata> box, _) {
-          final trips = box.values.toList()
+          final trips = box.values
+              .where((trip) => trip.profileKey == profileKey)
+              .toList()
             ..sort((a, b) => b.startTimestampMs.compareTo(a.startTimestampMs));
 
           if (trips.isEmpty) {
@@ -87,6 +94,22 @@ class TripHistoryScreen extends StatelessWidget {
                 ]));
               }
               final trip = visibleTrips[index - 1];
+              final samples = sampleBox.values
+                  .where((sample) => sample.tripId == trip.tripId)
+                  .toList()
+                ..sort((a, b) => a.timestampMs.compareTo(b.timestampMs));
+              final distanceKm = _distanceKm(samples);
+              final usedPercent = trip.startBatteryPercent != null &&
+                      trip.endBatteryPercent != null
+                  ? (trip.startBatteryPercent! - trip.endBatteryPercent!)
+                      .clamp(0, 100)
+                  : (distanceKm * profile.baseWhPerKm /
+                          profile.totalEnergyWh() *
+                          100)
+                      .clamp(0, 100);
+              final fromPercent = trip.startBatteryPercent ?? 100;
+              final toPercent = trip.endBatteryPercent ??
+                  (fromPercent - usedPercent).clamp(0, 100);
               final start =
                   DateTime.fromMillisecondsSinceEpoch(trip.startTimestampMs);
               final durationLabel = trip.endTimestampMs != null
@@ -133,7 +156,13 @@ class TripHistoryScreen extends StatelessWidget {
                             children: [
                               Text('${start.day.toString().padLeft(2, '0')}/${start.month.toString().padLeft(2, '0')}/${start.year}${trip.isCalibrationRide ? '  ·  CALIBRATION RIDE' : ''}', style: TextStyle(fontWeight: FontWeight.w900, color: trip.isCalibrationRide ? const Color(0xFF8A6400) : null)),
                               const SizedBox(height: 3),
-                              Text('$durationLabel  ·  ${trip.startChargeType.name} → ${trip.endChargeType.name}', style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                              Text('$durationLabel  ·  ${distanceKm.toStringAsFixed(1)} km', style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                              const SizedBox(height: 8),
+                              Row(children: [
+                                Expanded(child: Text('${fromPercent.toStringAsFixed(0)}% to ${toPercent.toStringAsFixed(0)}%', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800))),
+                                Text('-${usedPercent.toStringAsFixed(0)}%', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Theme.of(context).colorScheme.error)),
+                              ]),
+                              Text('${(distanceKm * profile.baseWhPerKm).toStringAsFixed(0)} Wh discharged', style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                               if (trip.notes.isNotEmpty) ...[
                                 const SizedBox(height: 4),
                                 Text(trip.notes, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
@@ -163,6 +192,18 @@ class TripHistoryScreen extends StatelessWidget {
   String _formatDuration(Duration d) {
     final m = d.inMinutes.remainder(60);
     return '${d.inHours}h ${m}m';
+  }
+
+  double _distanceKm(List<TripSample> samples) {
+    var distance = 0.0;
+    for (var i = 1; i < samples.length; i++) {
+      final seconds = (samples[i].timestampMs - samples[i - 1].timestampMs) /
+          1000;
+      if (seconds > 0 && seconds < 30) {
+        distance += samples[i].gpsSpeedKmh * seconds / 3600;
+      }
+    }
+    return distance;
   }
 
   void _showHistoryNotice(BuildContext context) {

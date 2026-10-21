@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.21 — Bike isolation and calibration polish
+
+- Removed the Dash splash artwork and added a compact RangeBuddy range icon.
+- New installs start with no bike; add a catalogue bike explicitly, with confirmation.
+- Kept virtual batteries, charge records, saved chargers/places and new ride history scoped to each bike.
+- Ride cards now show duration, distance, charge used, and virtual charge from/to values.
+- Added delete confirmation for charger/place pills and swiped charge sessions.
+- Improved calibration guidance and the active-ride calibration layout with a consistent yellow accent.
+
 ## 0.1.2 — Charging, calibration and ride context
 
 - Added Dash, RangeBuddy's battery-bot mascot, for the launcher and app splash screen.

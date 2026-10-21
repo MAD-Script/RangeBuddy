@@ -76,9 +76,11 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> {
     try {
       await widget.logger.startTrip(
         tripId: widget.tripId,
+        profileKey: widget.profileKey ?? '0',
         riderWeightKg: widget.riderWeightKg,
         passengerWeightKg: widget.passengerWeightKg,
         isCalibrationRide: widget.isCalibrationRide,
+        startBatteryPercent: widget.engine.batteryPercent(),
         onSample: _onSample,
       );
       _tripStartTime = DateTime.now();
@@ -265,7 +267,9 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> {
   }
 
   Future<void> _endRide() async {
-    await widget.logger.stopTrip();
+    await widget.logger.stopTrip(
+      endBatteryPercent: widget.engine.batteryPercent(),
+    );
     if (mounted) Navigator.pop(context);
   }
 
@@ -339,9 +343,26 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> {
         engine.profile.totalEnergyWh() / engine.profile.baseWhPerKm;
     final nearestPlace = _nearestReachablePlace(rangeKm);
 
-    return Scaffold(
+    final baseTheme = Theme.of(context);
+    final calibrationAccent = baseTheme.brightness == Brightness.dark
+        ? const Color(0xFFFFC107)
+        : const Color(0xFFE2A900);
+    final calibrationContainer = baseTheme.brightness == Brightness.dark
+        ? const Color(0xFF5A4610)
+        : const Color(0xFFFFF1BF);
+
+    return Theme(
+      data: widget.isCalibrationRide
+          ? baseTheme.copyWith(
+              colorScheme: baseTheme.colorScheme.copyWith(
+                primary: calibrationAccent,
+                primaryContainer: calibrationContainer,
+              ),
+            )
+          : baseTheme,
+      child: Scaffold(
       appBar: AppBar(
-        backgroundColor: widget.isCalibrationRide ? const Color(0xFFFFC107) : null,
+        backgroundColor: widget.isCalibrationRide ? calibrationAccent : null,
         title: const Text('Ride in progress', style: TextStyle(fontWeight: FontWeight.w800)),
         actions: const [
           Padding(
@@ -360,7 +381,10 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> {
                 Container(
                   margin: const EdgeInsets.only(bottom: 8),
                   padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(color: const Color(0xFFFFF3CD), borderRadius: BorderRadius.circular(12)),
+                  decoration: BoxDecoration(
+                    color: calibrationContainer,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                   child: const Text('CALIBRATION RIDE · Do not log charging until Battery drained is recorded.', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.w800)),
                 ),
               Center(
@@ -477,11 +501,24 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> {
                 const SizedBox(height: 18),
                 Row(
                   children: [
-                    Expanded(child: OutlinedButton.icon(onPressed: () => _logCalibrationEvent(VehicleAlertType.lowBatteryAudibleWarning, 'Audible warning'), icon: const Icon(Icons.volume_up_outlined), label: const Text('Audible warning'))),
+                    Expanded(child: _CalibrationActionButton(
+                      icon: Icons.volume_up_outlined,
+                      label: 'Audible\nwarning',
+                      onPressed: () => _logCalibrationEvent(VehicleAlertType.lowBatteryAudibleWarning, 'Audible warning'),
+                    )),
                     const SizedBox(width: 6),
-                    Expanded(child: OutlinedButton.icon(onPressed: () => _logCalibrationEvent(VehicleAlertType.criticalBlinkingRed, 'Critical warning'), icon: const Icon(Icons.warning_amber_rounded), label: const Text('Critical'))),
+                    Expanded(child: _CalibrationActionButton(
+                      icon: Icons.warning_amber_rounded,
+                      label: 'Critical',
+                      onPressed: () => _logCalibrationEvent(VehicleAlertType.criticalBlinkingRed, 'Critical warning'),
+                    )),
                     const SizedBox(width: 6),
-                    Expanded(child: FilledButton.icon(onPressed: () => _logCalibrationEvent(VehicleAlertType.batteryDrained, 'Battery drained'), icon: const Icon(Icons.battery_0_bar_rounded), label: const Text('Battery drained'))),
+                    Expanded(child: _CalibrationActionButton(
+                      icon: Icons.battery_0_bar_rounded,
+                      label: 'Battery\ndrained',
+                      filled: true,
+                      onPressed: () => _logCalibrationEvent(VehicleAlertType.batteryDrained, 'Battery drained'),
+                    )),
                   ],
                 ),
                 const SizedBox(height: 12),
@@ -495,6 +532,39 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> {
           ),
         ),
       ),
+      ),
+    );
+  }
+}
+
+class _CalibrationActionButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool filled;
+  final VoidCallback onPressed;
+
+  const _CalibrationActionButton({
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+    this.filled = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final content = Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(icon, size: 22),
+        const SizedBox(height: 4),
+        Text(label, textAlign: TextAlign.center, maxLines: 2),
+      ],
+    );
+    return SizedBox(
+      height: 88,
+      child: filled
+          ? FilledButton(onPressed: onPressed, child: content)
+          : OutlinedButton(onPressed: onPressed, child: content),
     );
   }
 }

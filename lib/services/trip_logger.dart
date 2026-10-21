@@ -153,11 +153,13 @@ class TripLogger {
   /// from real GPS instead of a simulated loop.
   Future<void> startTrip({
     required String tripId,
+    required String profileKey,
     required double riderWeightKg,
     double passengerWeightKg = 0,
     ChargeStateType startChargeType = ChargeStateType.unknown,
     int? startBarLevel,
     bool isCalibrationRide = false,
+    double? startBatteryPercent,
     TripSampleCallback? onSample,
   }) async {
     if (isLogging) {
@@ -170,12 +172,14 @@ class TripLogger {
       tripId,
       TripMetadata(
         tripId: tripId,
+        profileKey: profileKey,
         startTimestampMs: DateTime.now().millisecondsSinceEpoch,
         riderWeightKg: riderWeightKg,
         passengerWeightKg: passengerWeightKg,
         startChargeType: startChargeType,
         startBarLevel: startBarLevel,
         isCalibrationRide: isCalibrationRide,
+        startBatteryPercent: startBatteryPercent,
       ),
     );
 
@@ -308,6 +312,7 @@ class TripLogger {
     ChargeStateType endChargeType = ChargeStateType.unknown,
     int? endBarLevel,
     String notes = '',
+    double? endBatteryPercent,
   }) async {
     if (!isLogging) return;
     await _positionSub?.cancel();
@@ -323,6 +328,7 @@ class TripLogger {
       meta.endChargeType = endChargeType;
       meta.endBarLevel = endBarLevel;
       meta.notes = notes;
+      meta.endBatteryPercent = endBatteryPercent;
       await meta.save();
     }
     _activeTripId = null;

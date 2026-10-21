@@ -10,7 +10,7 @@ import 'package:path_provider/path_provider.dart';
 class GitHubReleaseService {
   static const installedVersion = String.fromEnvironment(
     'RANGEBUDDY_APP_VERSION',
-    defaultValue: '0.1.2',
+    defaultValue: '0.1.21',
   );
   static const repository = String.fromEnvironment(
     'RANGEBUDDY_GITHUB_REPOSITORY',

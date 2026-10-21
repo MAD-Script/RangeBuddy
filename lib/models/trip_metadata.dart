@@ -51,6 +51,15 @@ class TripMetadata extends HiveObject {
   @HiveField(10)
   bool isCalibrationRide;
 
+  @HiveField(11)
+  String profileKey;
+
+  @HiveField(12)
+  double? startBatteryPercent;
+
+  @HiveField(13)
+  double? endBatteryPercent;
+
   TripMetadata({
     required this.tripId,
     required this.startTimestampMs,
@@ -63,5 +72,8 @@ class TripMetadata extends HiveObject {
     this.endBarLevel,
     this.notes = '',
     this.isCalibrationRide = false,
+    this.profileKey = '0',
+    this.startBatteryPercent,
+    this.endBatteryPercent,
   });
 }

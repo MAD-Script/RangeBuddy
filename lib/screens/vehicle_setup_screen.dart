@@ -22,8 +22,6 @@ class VehicleSetupScreen extends StatefulWidget {
   final Box<BatteryState> batteryStateBox;
   final Box<ChargeSession> chargeSessionBox;
   final Directory tileCacheDir;
-  final VoidCallback onStartCalibration;
-  final VoidCallback onConfirmFullCharge;
 
   const VehicleSetupScreen({
     super.key,
@@ -36,8 +34,6 @@ class VehicleSetupScreen extends StatefulWidget {
     required this.batteryStateBox,
     required this.chargeSessionBox,
     required this.tileCacheDir,
-    required this.onStartCalibration,
-    required this.onConfirmFullCharge,
   });
 
   @override
@@ -83,19 +79,14 @@ class _VehicleSetupScreenState extends State<VehicleSetupScreen> {
     }
   }
 
-  Future<void> _selectVehicle(VehicleCatalogEntry entry) async {
-    widget.profile
-      ..name = entry.displayName
-      ..systemVoltage = entry.systemVoltage
-      ..batteryAh = entry.batteryAh
-      ..motorWattPeak = entry.motorWattPeak
-      ..vehicleWeightKg = entry.vehicleWeightKg
-      ..topSpeedKmh = entry.topSpeedKmh
-      ..baseWhPerKm = entry.nominalWhPerKm
-      ..isVerified = true
-      ..catalogId = entry.id;
-    await widget.profile.save();
-    setState(() {});
+  Future<void> _openAddBike() async {
+    final key = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AddBikeScreen(profileBox: widget.profileBox),
+      ),
+    );
+    if (key != null && mounted) widget.onProfileSelected(key);
   }
 
   Future<void> _createManualProfile() async {
@@ -221,8 +212,6 @@ class _VehicleSetupScreenState extends State<VehicleSetupScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final grouped = groupCatalogByBrand(_catalog);
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Bike settings', style: TextStyle(fontWeight: FontWeight.w800)),
@@ -230,28 +219,6 @@ class _VehicleSetupScreenState extends State<VehicleSetupScreen> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
         children: [
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(18),
-              child: Row(
-                children: [
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(color: Theme.of(context).colorScheme.primaryContainer, shape: BoxShape.circle),
-                    child: Icon(Icons.electric_bike_rounded, color: Theme.of(context).colorScheme.primary),
-                  ),
-                  const SizedBox(width: 13),
-                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(widget.profile.name, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900)),
-                    const SizedBox(height: 3),
-                    Text('${widget.profile.systemVoltage.toStringAsFixed(0)}V  ·  ${widget.profile.batteryAh.toStringAsFixed(0)}Ah  ·  ${widget.profile.topSpeedKmh.toStringAsFixed(0)} km/h', style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
-                  ])),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 20),
           Text('BATTERY', style: TextStyle(fontSize: 11, letterSpacing: 1.5, fontWeight: FontWeight.w800, color: Theme.of(context).colorScheme.onSurfaceVariant)),
           const SizedBox(height: 8),
           Card(child: ListTile(
@@ -262,16 +229,23 @@ class _VehicleSetupScreenState extends State<VehicleSetupScreen> {
           Text('CALIBRATION', style: TextStyle(fontSize: 11, letterSpacing: 1.5, fontWeight: FontWeight.w800, color: Theme.of(context).colorScheme.onSurfaceVariant)),
           const SizedBox(height: 8),
           Card(child: Column(children: [
-            ListTile(
-              onTap: widget.onConfirmFullCharge,
-              leading: const Icon(Icons.battery_charging_full_rounded),
-              title: const Text('Confirm full charge', style: TextStyle(fontWeight: FontWeight.w800)),
-              subtitle: const Text('Resets the virtual battery to 100% for this bike — the main way to correct drift.'),
-            ),
-            const Divider(height: 1),
             SwitchListTile(
               value: widget.appSettingsBox.get('calibration_mode_${widget.profileKey}') == 'true',
               onChanged: (enabled) async {
+                if (enabled) {
+                  final confirm = await showDialog<bool>(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: const Text('About calibration mode'),
+                      content: const Text('Use calibration only after a full charge. Your next Start Ride will become a calibration ride. Ride normally, do not log charging, and record Battery drained only when the vehicle is crawling at about 5–10 km/h. You may ride with passengers and use multiple sessions before the final drained event.'),
+                      actions: [
+                        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+                        FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Enable mode')),
+                      ],
+                    ),
+                  );
+                  if (confirm != true) return;
+                }
                 if (!enabled) {
                   final confirm = await showDialog<bool>(context: context, builder: (context) => AlertDialog(title: const Text('Turn off calibration mode?'), content: const Text('An incomplete calibration will not improve battery health. You can enable it again later.'), actions: [TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Keep on')), FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Turn off'))]));
                   if (confirm != true) return;
@@ -281,20 +255,6 @@ class _VehicleSetupScreenState extends State<VehicleSetupScreen> {
               },
               title: const Text('Calibration mode', style: TextStyle(fontWeight: FontWeight.w800)),
               subtitle: const Text('Make Start Ride begin a guided calibration ride.'),
-            ),
-            const Divider(height: 1),
-            ListTile(
-              onTap: () async {
-                final proceed = await showDialog<bool>(context: context, builder: (context) => AlertDialog(
-                  title: const Text('Before calibration'),
-                  content: const Text('Confirm a full charge first. You may ride with passengers. Do not log any charge during calibration. End only after Battery drained, when the bike is crawling at roughly 5–10 km/h.'),
-                  actions: [TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')), FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Start'))],
-                ));
-                if (proceed == true) widget.onStartCalibration();
-              },
-              leading: const Icon(Icons.rule_rounded),
-              title: const Text('Start calibration ride', style: TextStyle(fontWeight: FontWeight.w800)),
-              subtitle: const Text('A ride flagged for extra calibration prompts, to sharpen prediction accuracy.'),
             ),
           ])),
           const SizedBox(height: 20),
@@ -309,7 +269,7 @@ class _VehicleSetupScreenState extends State<VehicleSetupScreen> {
                 title: Text(widget.profileBox.get(key)!.name, style: const TextStyle(fontWeight: FontWeight.w800)),
                 subtitle: Text(widget.profileBox.get(key)!.isVerified ? 'Verified catalog profile' : 'Unverified manual profile'),
               ),
-            ListTile(onTap: _createManualProfile, leading: const Icon(Icons.add_rounded), title: const Text('Add unverified bike', style: TextStyle(fontWeight: FontWeight.w800))),
+            ListTile(onTap: _openAddBike, leading: const Icon(Icons.add_rounded), title: const Text('Add bike', style: TextStyle(fontWeight: FontWeight.w800)), subtitle: const Text('Browse the verified catalogue or add your own.')),
           ])),
           TextButton.icon(
             onPressed: _copyBikeRequest,
@@ -340,39 +300,6 @@ class _VehicleSetupScreenState extends State<VehicleSetupScreen> {
               ]),
             ),
           ),
-          const SizedBox(height: 22),
-          Text('BIKE MODEL', style: TextStyle(fontSize: 11, letterSpacing: 1.5, fontWeight: FontWeight.w800, color: Theme.of(context).colorScheme.onSurfaceVariant)),
-          const SizedBox(height: 6),
-          Text(
-            'Vehicle specs come from the catalog, not manual entry — '
-            'weight/voltage/capacity are manufacturer facts.',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-          ),
-          const SizedBox(height: 10),
-          for (final brand in grouped.keys) ...[
-            Card(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 2),
-                    child: Text(brand.toUpperCase(), style: TextStyle(fontSize: 11, letterSpacing: 1.2, fontWeight: FontWeight.w800, color: Theme.of(context).colorScheme.primary)),
-                  ),
-                  for (final entry in grouped[brand]!)
-                    RadioListTile<String>(
-                      value: entry.displayName,
-                      groupValue: widget.profile.name,
-                      onChanged: (_) => _selectVehicle(entry),
-                      title: Text(entry.model, style: const TextStyle(fontWeight: FontWeight.w800)),
-                      subtitle: Text('${entry.systemVoltage.toStringAsFixed(0)}V · ${entry.batteryAh.toStringAsFixed(0)}Ah · ${entry.topSpeedKmh.toStringAsFixed(0)} km/h'),
-                    ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 10),
-          ],
           const SizedBox(height: 20),
           Text('APP UPDATES', style: TextStyle(fontSize: 11, letterSpacing: 1.5, fontWeight: FontWeight.w800, color: Theme.of(context).colorScheme.onSurfaceVariant)),
           const SizedBox(height: 8),
@@ -388,6 +315,130 @@ class _VehicleSetupScreenState extends State<VehicleSetupScreen> {
             icon: const Icon(Icons.ios_share_rounded),
             label: const Text('Export anonymous calibration data'),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+VehicleProfile _profileFromCatalog(VehicleCatalogEntry entry) => VehicleProfile(
+      name: entry.displayName,
+      systemVoltage: entry.systemVoltage,
+      batteryAh: entry.batteryAh,
+      motorWattPeak: entry.motorWattPeak,
+      vehicleWeightKg: entry.vehicleWeightKg,
+      topSpeedKmh: entry.topSpeedKmh,
+      baseWhPerKm: entry.nominalWhPerKm,
+      isVerified: true,
+      catalogId: entry.id,
+    );
+
+class FirstBikeScreen extends StatelessWidget {
+  final Box<VehicleProfile> profileBox;
+  final WidgetBuilder homeBuilder;
+  const FirstBikeScreen({
+    super.key,
+    required this.profileBox,
+    required this.homeBuilder,
+  });
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        appBar: AppBar(title: const Text('RangeBuddy')),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(28),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.electric_bike_rounded,
+                    size: 56, color: Theme.of(context).colorScheme.primary),
+                const SizedBox(height: 18),
+                const Text('Add your first bike',
+                    style:
+                        TextStyle(fontSize: 25, fontWeight: FontWeight.w900)),
+                const SizedBox(height: 8),
+                const Text(
+                  'Every bike keeps its own virtual battery, charging sessions, and ride history.',
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 24),
+                FilledButton.icon(
+                  onPressed: () async {
+                    final key = await Navigator.push<String>(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => AddBikeScreen(profileBox: profileBox),
+                      ),
+                    );
+                    if (key != null && context.mounted) {
+                      Navigator.pushAndRemoveUntil(
+                        context,
+                        MaterialPageRoute(builder: homeBuilder),
+                        (_) => false,
+                      );
+                    }
+                  },
+                  icon: const Icon(Icons.add_rounded),
+                  label: const Text('Add bike'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+}
+
+class AddBikeScreen extends StatelessWidget {
+  final Box<VehicleProfile> profileBox;
+  const AddBikeScreen({super.key, required this.profileBox});
+
+  Future<void> _add(BuildContext context, VehicleCatalogEntry entry) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Add ${entry.displayName}?'),
+        content: Text(
+          '${entry.systemVoltage.toStringAsFixed(0)}V · ${entry.batteryAh.toStringAsFixed(0)}Ah · ${entry.topSpeedKmh.toStringAsFixed(0)} km/h\n\nThis creates a separate virtual battery and separate charging and ride histories.',
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Add bike')),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+    final key = await profileBox.add(_profileFromCatalog(entry));
+    if (context.mounted) Navigator.pop(context, key.toString());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final catalog = vehicleCatalog;
+    return Scaffold(
+      appBar: AppBar(title: const Text('Add bike')),
+      body: ListView(
+        padding: const EdgeInsets.all(20),
+        children: [
+          const Text('Verified catalogue',
+              style: TextStyle(fontWeight: FontWeight.w900)),
+          const SizedBox(height: 8),
+          for (final entry in catalog)
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.electric_bike_rounded),
+                title: Text(entry.displayName,
+                    style: const TextStyle(fontWeight: FontWeight.w800)),
+                subtitle: Text(
+                    '${entry.systemVoltage.toStringAsFixed(0)}V · ${entry.batteryAh.toStringAsFixed(0)}Ah · ${entry.topSpeedKmh.toStringAsFixed(0)} km/h · ${entry.ratedRangeKm.toStringAsFixed(0)} km'),
+                trailing: const Icon(Icons.add_circle_outline_rounded),
+                onTap: () => _add(context, entry),
+              ),
+            ),
         ],
       ),
     );
